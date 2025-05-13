@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "react-native-webview": "^13.13.5",
+    "yahoo-finance2": "^2.13.3"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "^18.0.0"
+  }
+}
