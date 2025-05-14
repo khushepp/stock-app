@@ -1,8 +1,43 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query } from '@nestjs/common';
 import yahooFinance from 'yahoo-finance2';
+import axios from 'axios';
+
+class FinnhubNewsService {
+  private apiKey = process.env.FINNHUB_API_KEY;
+  private baseUrl = 'https://finnhub.io/api/v1/news';
+
+  async fetchLatestNews(category: string = 'general') {
+    if (!this.apiKey) {
+      throw new Error('Finnhub API key not set');
+    }
+    try {
+      const url = `${this.baseUrl}?category=${category}&token=${this.apiKey}`;
+      const response = await axios.get(url);
+      return response.data;
+    } catch (error: any) {
+      // Handle rate limit or API errors
+      return { error: error?.response?.data?.error || 'Failed to fetch news' };
+    }
+  }
+}
 
 @Controller('api/stock-details')
 export class StockController {
+  private newsService = new FinnhubNewsService();
+
+  @Get('/news')
+  async getNews(@Query('category') category: string = 'business') {
+    try {
+      const newsData = await this.newsService.fetchLatestNews(category);
+      if ('error' in newsData) {
+        return { error: newsData.error };
+      }
+      return { news: newsData };
+    } catch (error) {
+      return { error: 'Failed to fetch news data.' };
+    }
+  }
+
   @Post()
   async getStockDetails(@Body('ticker') ticker: string) {
     if (!ticker) {

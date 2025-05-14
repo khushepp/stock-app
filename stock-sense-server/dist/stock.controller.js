@@ -15,7 +15,38 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.StockController = void 0;
 const common_1 = require("@nestjs/common");
 const yahoo_finance2_1 = require("yahoo-finance2");
+const axios_1 = require("axios");
+class FinnhubNewsService {
+    apiKey = process.env.FINNHUB_API_KEY;
+    baseUrl = 'https://finnhub.io/api/v1/news';
+    async fetchLatestNews(category = 'general') {
+        if (!this.apiKey) {
+            throw new Error('Finnhub API key not set');
+        }
+        try {
+            const url = `${this.baseUrl}?category=${category}&token=${this.apiKey}`;
+            const response = await axios_1.default.get(url);
+            return response.data;
+        }
+        catch (error) {
+            return { error: error?.response?.data?.error || 'Failed to fetch news' };
+        }
+    }
+}
 let StockController = class StockController {
+    newsService = new FinnhubNewsService();
+    async getNews(category = 'business') {
+        try {
+            const newsData = await this.newsService.fetchLatestNews(category);
+            if ('error' in newsData) {
+                return { error: newsData.error };
+            }
+            return { news: newsData };
+        }
+        catch (error) {
+            return { error: 'Failed to fetch news data.' };
+        }
+    }
     async getStockDetails(ticker) {
         if (!ticker) {
             return { error: 'Ticker is required.' };
@@ -80,6 +111,13 @@ let StockController = class StockController {
     }
 };
 exports.StockController = StockController;
+__decorate([
+    (0, common_1.Get)('/news'),
+    __param(0, (0, common_1.Query)('category')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], StockController.prototype, "getNews", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)('ticker')),

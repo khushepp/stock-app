@@ -1,4 +1,12 @@
 export declare class StockController {
+    private newsService;
+    getNews(category?: string): Promise<{
+        error: any;
+        news?: undefined;
+    } | {
+        news: any;
+        error?: undefined;
+    }>;
     getStockDetails(ticker: string): Promise<{
         error: string;
         symbol?: undefined;

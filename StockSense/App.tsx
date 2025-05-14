@@ -12,6 +12,11 @@ import { View, Text, Button, StyleSheet, TextInput, Alert, ActivityIndicator, To
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'node-libs-react-native/globals';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import NewsScreen from './NewsScreen';
+import PortfolioScreen from './PortfolioScreen';
+import ProfileScreen from './ProfileScreen';
+import AgentModeScreen from './AgentModeScreen';
 
 // TODO: Replace with your Supabase project URL and anon key
 const SUPABASE_URL = 'https://egmznvekiwvesxzcmwcq.supabase.co';
@@ -20,6 +25,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
 function Logo() {
   return (
@@ -131,7 +137,7 @@ function SignUpScreen({ navigation }: any) {
   );
 }
 
-function HomeScreen({ onLogout }: any) {
+export function HomeScreen({ onLogout }: any) {
   const [ticker, setTicker] = useState('');
   const [stock, setStock] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -277,6 +283,20 @@ function HomeScreen({ onLogout }: any) {
   );
 }
 
+function MainTabs({ onLogout }: { onLogout: () => void }) {
+  return (
+    <Tab.Navigator screenOptions={{ headerShown: false }}>
+      <Tab.Screen name="Home">
+        {props => <HomeScreen {...props} onLogout={onLogout} />}
+      </Tab.Screen>
+      <Tab.Screen name="News" component={NewsScreen} />
+      <Tab.Screen name="Portfolio" component={PortfolioScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="AgentMode" component={AgentModeScreen} options={{ title: 'Agent Mode' }} />
+    </Tab.Navigator>
+  );
+}
+
 function App(): React.JSX.Element {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -316,8 +336,8 @@ function App(): React.JSX.Element {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {session ? (
-          <Stack.Screen name="Home">
-            {props => <HomeScreen {...props} onLogout={handleLogout} />}
+          <Stack.Screen name="MainTabs">
+            {props => <MainTabs {...props} onLogout={handleLogout} />}
           </Stack.Screen>
         ) : (
           <>
