@@ -1,0 +1,8 @@
+We will be developing an app where users will be feeding in their stock market portfolio and watchlist. Based on those stocks, the app will be performing AI-based sentiment analysis on news reporting the stock and suggesting actions like buy, sell or hold based on the sentiment analysis performed. 
+
+To perform said sentiment analysis, we will be using FinBERT which is a NLP library trained specifically on Financial Data and hence is able to provide accurate sentiment analysis on news which include financial heavy terms. Currently, we are focusing on U.S.A. market specifically and will be analyzing American news sources. 
+ 
+Along with this, transactions made on the portfolio will be analyzed and compared to models of different trading styles. Fits to these models will help the app to suggest better transactions and will also help the user improve their own investments. 
+
+To do this, all transactions will need to be monitored and analyzed and then models will have to be compared with them. The models used by us have been referred from a GitHub repository. 
+ 
