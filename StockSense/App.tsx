@@ -12,6 +12,7 @@ import { View, Text, Button, StyleSheet, TextInput, Alert, ActivityIndicator, To
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'node-libs-react-native/globals';
+import 'react-native-url-polyfill/auto';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import NewsScreen from './NewsScreen';
 import PortfolioScreen from './PortfolioScreen';
