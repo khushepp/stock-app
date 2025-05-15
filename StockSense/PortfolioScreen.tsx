@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, Button, FlatList, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { supabase } from './App';
 
 // Define the type for a portfolio item
@@ -11,6 +12,15 @@ interface PortfolioItem {
   buy_price: number;
   date_added?: string;
   company_name?: string;
+}
+
+// Add WatchlistItem interface
+interface WatchlistItem {
+  id: string;
+  user_id: string;
+  ticker: string;
+  company_name: string;
+  date_added?: string;
 }
 
 interface Suggestion {
@@ -55,6 +65,23 @@ const PortfolioScreen = () => {
 
   // State for current prices
   const [currentPrices, setCurrentPrices] = useState<{ [ticker: string]: { price?: number; currency?: string; loading: boolean; error?: string } }>({});
+
+  // Section toggle state
+  const [section, setSection] = useState<'portfolio' | 'watchlist'>('portfolio');
+
+  // Watchlist state
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [addWatchlistModalVisible, setAddWatchlistModalVisible] = useState(false);
+  const [addWatchlistLoading, setAddWatchlistLoading] = useState(false);
+  const [watchlistTicker, setWatchlistTicker] = useState('');
+  const [watchlistCompanyName, setWatchlistCompanyName] = useState('');
+  const [watchlistSuggestions, setWatchlistSuggestions] = useState<Suggestion[]>([]);
+  const [watchlistSuggestionsLoading, setWatchlistSuggestionsLoading] = useState(false);
+  const [watchlistShowSuggestions, setWatchlistShowSuggestions] = useState(false);
+  const watchlistDebounceTimeout = useRef<any>(null);
+  const [removeWatchlistLoading, setRemoveWatchlistLoading] = useState(false);
+  const [selectedWatchlistToRemove, setSelectedWatchlistToRemove] = useState<WatchlistItem | null>(null);
 
   // Fetch user and portfolio on mount
   useEffect(() => {
@@ -138,6 +165,66 @@ const PortfolioScreen = () => {
       });
     }
   }, [loading, portfolio]);
+
+  // Watchlist: Fetch on mount and when userId changes
+  useEffect(() => {
+    if (!userId || section !== 'watchlist') return;
+    setWatchlistLoading(true);
+    supabase
+      .from('watchlist')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date_added', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error) setWatchlist((data as WatchlistItem[]) || []);
+        setWatchlistLoading(false);
+      });
+  }, [userId, section]);
+
+  // Watchlist: Fetch current prices for watchlist tickers
+  const [watchlistPrices, setWatchlistPrices] = useState<{ [ticker: string]: { price?: number; currency?: string; loading: boolean; error?: string } }>({});
+  useEffect(() => {
+    if (section !== 'watchlist' || watchlist.length === 0) return;
+    const uniqueTickers = Array.from(new Set(watchlist.map(item => item.ticker.toUpperCase())));
+    setWatchlistPrices(prev => {
+      const newState = { ...prev };
+      uniqueTickers.forEach(ticker => {
+        if (!newState[ticker]) newState[ticker] = { loading: true };
+      });
+      Object.keys(newState).forEach(ticker => {
+        if (!uniqueTickers.includes(ticker)) delete newState[ticker];
+      });
+      return newState;
+    });
+    uniqueTickers.forEach(async (ticker) => {
+      setWatchlistPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: true, error: undefined } }));
+      try {
+        const session = supabase.auth.session();
+        const jwt = session?.access_token;
+        if (!jwt) {
+          setWatchlistPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: 'Not authenticated' } }));
+          return;
+        }
+        const backendUrl = 'http://10.0.2.2:3000/api/stock-details';
+        const response = await fetch(backendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwt}`,
+          },
+          body: JSON.stringify({ ticker }),
+        });
+        const data = await response.json();
+        if (!response.ok || data.error) {
+          setWatchlistPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: data.error || 'Failed to fetch price' } }));
+        } else {
+          setWatchlistPrices(prev => ({ ...prev, [ticker]: { price: data.price, currency: data.currency, loading: false } }));
+        }
+      } catch (err) {
+        setWatchlistPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: 'Network error' } }));
+      }
+    });
+  }, [watchlist, section]);
 
   // Debounced suggestions fetch
   const fetchSuggestions = async (query: string) => {
@@ -244,8 +331,124 @@ const PortfolioScreen = () => {
     !price.trim() ||
     !companyName;
 
+  // Watchlist: Suggestions logic
+  const fetchWatchlistSuggestions = async (query: string) => {
+    if (!query || query.length < 2) {
+      setWatchlistSuggestions([]);
+      setWatchlistShowSuggestions(false);
+      return;
+    }
+    setWatchlistSuggestionsLoading(true);
+    try {
+      const session = supabase.auth.session();
+      const jwt = session?.access_token;
+      if (!jwt) {
+        setWatchlistSuggestions([]);
+        setWatchlistShowSuggestions(false);
+        setWatchlistSuggestionsLoading(false);
+        return;
+      }
+      const backendUrl = 'http://10.0.2.2:3000/api/stock-details/suggestions';
+      const response = await fetch(backendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({ query }),
+      });
+      const data = await response.json();
+      setWatchlistSuggestions(data.suggestions || []);
+      setWatchlistShowSuggestions(true);
+    } catch (err) {
+      setWatchlistSuggestions([]);
+      setWatchlistShowSuggestions(false);
+    }
+    setWatchlistSuggestionsLoading(false);
+  };
+  const handleWatchlistTickerChange = (text: string) => {
+    setWatchlistTicker(text);
+    setWatchlistCompanyName('');
+    if (watchlistDebounceTimeout.current) clearTimeout(watchlistDebounceTimeout.current);
+    watchlistDebounceTimeout.current = setTimeout(() => {
+      fetchWatchlistSuggestions(text);
+    }, 300);
+  };
+  const handleWatchlistSuggestionSelect = (symbol: string) => {
+    setWatchlistTicker(symbol);
+    const suggestion = watchlistSuggestions.find(s => s.symbol === symbol);
+    setWatchlistCompanyName(suggestion ? suggestion.name : '');
+    setWatchlistShowSuggestions(false);
+    setWatchlistSuggestions([]);
+  };
+
+  // Add to watchlist
+  const handleAddWatchlist = async () => {
+    if (!watchlistTicker.trim() || !userId || !watchlistCompanyName) return;
+    setAddWatchlistLoading(true);
+    try {
+      const { data, error: insertError } = await supabase
+        .from('watchlist')
+        .insert([
+          {
+            user_id: userId,
+            ticker: watchlistTicker.trim(),
+            company_name: watchlistCompanyName,
+          },
+        ])
+        .select();
+      if (insertError) {
+        setAddWatchlistLoading(false);
+        return;
+      }
+      setWatchlist(prev => [data[0] as WatchlistItem, ...prev]);
+      setWatchlistTicker('');
+      setWatchlistCompanyName('');
+      setAddWatchlistModalVisible(false);
+    } catch (err) {}
+    setAddWatchlistLoading(false);
+  };
+  const isAddWatchlistDisabled =
+    addWatchlistLoading ||
+    !watchlistTicker.trim() ||
+    !watchlistCompanyName;
+
+  // Remove from watchlist
+  const handleRemoveWatchlist = async (item: WatchlistItem) => {
+    setRemoveWatchlistLoading(true);
+    try {
+      const { error: deleteError } = await supabase
+        .from('watchlist')
+        .delete()
+        .eq('id', item.id);
+      if (!deleteError) {
+        setWatchlist(prev => prev.filter(w => w.id !== item.id));
+      }
+    } catch (err) {}
+    setRemoveWatchlistLoading(false);
+    setSelectedWatchlistToRemove(null);
+  };
+
   return (
   <View style={styles.container}>
+      {/* Section Toggle */}
+      <View style={styles.sectionToggleRow}>
+        <TouchableOpacity
+          style={[styles.sectionToggleButton, section === 'portfolio' && styles.sectionToggleButtonActive]}
+          onPress={() => setSection('portfolio')}
+        >
+          <Text style={[styles.sectionToggleText, section === 'portfolio' && styles.sectionToggleTextActive]}>Portfolio</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.sectionToggleButton, section === 'watchlist' && styles.sectionToggleButtonActive]}
+          onPress={() => setSection('watchlist')}
+        >
+          <Text style={[styles.sectionToggleText, section === 'watchlist' && styles.sectionToggleTextActive]}>Watchlist</Text>
+        </TouchableOpacity>
+      </View>
+      {/* Existing header and content */}
+      {section === 'portfolio' && (
+        <>
       <Text style={styles.header}>Your Portfolio</Text>
       <View style={styles.buttonRow}>
         <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
@@ -592,6 +795,137 @@ const PortfolioScreen = () => {
           style={{ marginTop: 24, width: '100%' }}
         />
       )}
+        </>
+      )}
+      {section === 'watchlist' && (
+        <>
+          <Text style={styles.header}>Your Watchlist</Text>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.addButton} onPress={() => setAddWatchlistModalVisible(true)}>
+              <Text style={styles.addButtonText}>ADD TO WATCHLIST</Text>
+            </TouchableOpacity>
+          </View>
+          <Modal
+            visible={addWatchlistModalVisible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setAddWatchlistModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Add to Watchlist</Text>
+                <View style={styles.inputRow}>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Stock Ticker"
+                      value={watchlistTicker}
+                      onChangeText={handleWatchlistTickerChange}
+                      autoCapitalize="characters"
+                      onFocus={() => watchlistTicker.length >= 2 && watchlistSuggestions.length > 0 && setWatchlistShowSuggestions(true)}
+                    />
+                    {/* Autocomplete suggestions */}
+                    {watchlistShowSuggestions && watchlistSuggestions.length > 0 && (
+                      <View style={styles.suggestionsBox}>
+                        {watchlistSuggestionsLoading ? (
+                          <ActivityIndicator style={{ margin: 8 }} />
+                        ) : (
+                          <ScrollView style={{ maxHeight: 180 }}>
+                            {watchlistSuggestions.map((s, idx) => (
+                              <TouchableOpacity key={s.symbol + idx} onPress={() => handleWatchlistSuggestionSelect(s.symbol)}>
+                                <Text style={styles.suggestion}>{s.symbol} - {s.name}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
+                  <Button title="Cancel" onPress={() => setAddWatchlistModalVisible(false)} color="#888" />
+                  <View style={{ width: 12 }} />
+                  <Button
+                    title="Add"
+                    onPress={handleAddWatchlist}
+                    disabled={isAddWatchlistDisabled}
+                  />
+                </View>
+              </View>
+            </View>
+          </Modal>
+          {watchlistLoading ? (
+            <ActivityIndicator size="large" color="#2e7d32" style={{ marginTop: 32 }} />
+          ) : (
+            <FlatList
+              data={watchlist}
+              keyExtractor={item => item.id}
+              renderItem={({ item }) => {
+                const ticker = item.ticker.toUpperCase();
+                const priceInfo = watchlistPrices[ticker];
+                return (
+                  <View style={styles.stockRow}>
+                    <View style={{ flex: 2 }}>
+                      <Text style={styles.ticker}>{item.ticker}</Text>
+                      <Text style={styles.companyName}>{item.company_name}</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                      {priceInfo ? (
+                        priceInfo.loading ? (
+                          <ActivityIndicator size="small" color="#1565c0" style={{ marginBottom: 2 }} />
+                        ) : priceInfo.error ? (
+                          <Text style={{ color: '#c62828', fontSize: 10, marginBottom: 2 }}>Err: {priceInfo.error}</Text>
+                        ) : (
+                          <Text style={{ color: '#2e7d32', fontSize: 10, marginBottom: 2 }}>
+                            Current: ${priceInfo.price} {priceInfo.currency || ''}
+                          </Text>
+                        )
+                      ) : null}
+                    </View>
+                    <TouchableOpacity 
+                      onPress={() => setSelectedWatchlistToRemove(item)}
+                      style={styles.deleteButton}
+                    >
+                      <Icon name="delete" size={16} color="#c62828" />
+                    </TouchableOpacity>
+
+                  </View>
+                );
+              }}
+              style={{ marginTop: 24, width: '100%' }}
+            />
+          )}
+          {/* Remove modal */}
+          <Modal
+            visible={!!selectedWatchlistToRemove}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setSelectedWatchlistToRemove(null)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Remove from Watchlist</Text>
+                {selectedWatchlistToRemove && (
+                  <>
+                    <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{selectedWatchlistToRemove.ticker}</Text>
+                    <Text style={{ fontSize: 13, color: '#555' }}>{selectedWatchlistToRemove.company_name}</Text>
+                  </>
+                )}
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
+                  <Button title="Cancel" onPress={() => setSelectedWatchlistToRemove(null)} color="#888" />
+                  <View style={{ width: 12 }} />
+                  <Button
+                    title={removeWatchlistLoading ? 'Removing...' : 'Remove'}
+                    color="#c62828"
+                    onPress={() => selectedWatchlistToRemove && handleRemoveWatchlist(selectedWatchlistToRemove)}
+                    disabled={removeWatchlistLoading}
+                  />
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </>
+      )}
   </View>
 );
 };
@@ -738,6 +1072,40 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sectionToggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionToggleButton: {
+    flex: 1,
+    paddingVertical: 8,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 8,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  sectionToggleButtonActive: {
+    backgroundColor: '#2e7d32',
+  },
+  sectionToggleText: {
+    color: '#2e7d32',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  sectionToggleTextActive: {
+    color: '#fff',
+  },
+  deleteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ffebee',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
 });
 

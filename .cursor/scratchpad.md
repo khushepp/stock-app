@@ -1,43 +1,64 @@
-## Project Status Board
+# Background and Motivation
+The user wants to add a watchlist feature to the app, allowing users to input stocks they are interested in (but do not own). This watchlist should:
+- Allow users to add stocks by ticker and company name (no quantity or price input)
+- Display ticker, name, and current price for each watchlist item
+- Allow users to switch between portfolio and watchlist sections from the top of the page, both following the same styling
 
-- [x] 1.1 Confirm backend `/api/stock-details` endpoint supports fetching current price for a single ticker (✅ Done)
-- [x] 1.2 (Optional) Consider batch endpoint for multiple tickers (Not required for now)
-- [x] 2.1 On portfolio load, extract all unique tickers
-- [x] 2.2 For each ticker, call backend API to fetch current price
-- [x] 2.3 Store current prices in state
-- [x] 2.4 Handle loading/error states for price fetching
-- [x] 3.1 Update FlatList to show current price for each stock
-- [x] 3.2 Show loading indicator/placeholder while fetching
-- [x] 3.3 Show error message if price fetch fails
-- [x] 4.1 Test with various portfolio sizes and error cases
-- [x] 1.1 Confirm or create a `transactions` table in Supabase with all portfolio fields plus sale details (renamed and expanded from `sales`).
-- [x] 2.1 When a stock is selected for sale, open a modal to input quantity sold and price per stock.
-- [x] 2.2 Validate input (quantity ≤ owned, price > 0).
-- [x] 3.1 On confirmation, insert a new transaction record into the `transactions` table with all portfolio and sale details.
-- [x] 3.2 Update the portfolio: subtract sold quantity from shares, or remove entry if all sold.
-- [x] 3.3 Handle errors and show feedback to the user.
-- [ ] 4.1 Test partial and full sales, invalid input, and error handling.
+# Key Challenges and Analysis
+- No existing code for watchlist in the frontend or backend
+- Need to create a new Supabase table for watchlist (with only id, user_id, ticker, company_name, date_added)
+- UI/UX: Must match the portfolio section and allow easy switching
+- Code reuse: PortfolioScreen logic for suggestions, price fetching, and styling should be reused for watchlist
+- Navigation: Should be intuitive and not disrupt existing flows
+- Test coverage: Need to ensure both portfolio and watchlist are tested
 
----
+# High-level Task Breakdown
 
-# New Feature: Sell Stock with Quantity and Price Input
+## 1. Database
+- [ ] Create a new Supabase table `watchlist` with fields: id, user_id, ticker, company_name, date_added (no quantity or price)
+  - Success: Table exists and can be queried/inserted from Supabase dashboard
 
-## Background and Motivation
-Currently, selling a stock removes the entire holding. The new flow will prompt for quantity and price, record the sale in the database, and update the portfolio accordingly.
+## 2. Data Model & API
+- [ ] Define TypeScript interface for watchlist item (id, user_id, ticker, company_name, date_added)
+  - Success: Interface is used in code and type checks pass
 
-## High-level Task Breakdown
-- [ ] 2.1 When a stock is selected for sale, open a modal to input quantity sold and price per stock.
-- [ ] 2.2 Validate input (quantity ≤ owned, price > 0).
-- [ ] 3.1 On confirmation, insert a new transaction record into the `transactions` table with all portfolio and sale details.
-- [ ] 3.2 Update the portfolio: subtract sold quantity from shares, or remove entry if all sold.
-- [ ] 3.3 Handle errors and show feedback to the user.
-- [ ] 4.1 Test partial and full sales, invalid input, and error handling.
+## 3. UI/UX & Navigation
+- [ ] Update PortfolioScreen to add a toggle (e.g. segmented control or tabs) at the top to switch between Portfolio and Watchlist
+  - Success: User can switch between sections, UI matches existing style
+- [ ] Create Watchlist section/component that:
+  - [ ] Allows adding a stock by ticker (with autocomplete and company name, reusing suggestion logic)
+  - [ ] Displays watchlist as a list: ticker, company name, current price (no quantity/price input or display)
+  - [ ] Allows removing a stock from watchlist
+  - Success: All UI/UX matches portfolio section, but with watchlist logic
 
----
+## 4. Logic & State Management
+- [ ] Fetch watchlist from Supabase for the logged-in user
+- [ ] Add stock to watchlist (insert into Supabase)
+- [ ] Remove stock from watchlist (delete from Supabase)
+- [ ] Fetch and display current price for each watchlist stock (reuse price logic)
+  - Success: All CRUD operations work, prices display correctly
 
-## Executor's Feedback or Assistance Requests
-- Previous project (current price integration) is complete.
-- Task 1.1 complete: `transactions` table (with all portfolio and sale fields) is ready in Supabase.
-- Next: Update frontend to insert all portfolio details plus sale details into transactions on sale.
-- Tasks 3.1, 3.2, 3.3 complete: Sale now records all details in transactions and updates/removes portfolio as needed.
-- Next: Test partial and full sales, invalid input, and error handling (Task 4.1). Please verify in the app and let me know if you encounter any issues.
+## 5. Testing
+- [ ] Write tests for watchlist add/remove/display logic
+- [ ] Manually test switching, adding, removing, and price display for both sections
+  - Success: All tests pass, manual QA confirms correct behavior
+
+# Project Status Board
+- [x] Database: watchlist table created
+- [x] Data model/interface defined
+- [x] UI toggle for Portfolio/Watchlist
+- [x] Watchlist add/display/remove logic
+- [ ] Price fetching for watchlist
+- [ ] Tests and manual QA
+
+# Executor's Feedback or Assistance Requests
+- The watchlist table was created in Supabase with fields: id (uuid, PK), user_id (uuid), ticker (text), company_name (text), date_added (timestamptz).
+- No foreign key constraint to a users table was added, as there is no users table in the current DB schema. user_id is stored as uuid only.
+- The WatchlistItem TypeScript interface was added to PortfolioScreen.tsx, matching the DB schema.
+- The UI toggle for switching between Portfolio and Watchlist is implemented at the top of PortfolioScreen. The Watchlist section is now implemented: users can add stocks (with suggestions), display their watchlist (ticker, name, current price), and remove stocks, all matching the Portfolio section's style.
+
+# Lessons
+- Read the file before you try to edit it.
+- If there are vulnerabilities that appear in the terminal, run npm audit before proceeding
+- Always ask before using the -force git command
+- Include info useful for debugging in the program output.

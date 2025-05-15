@@ -292,8 +292,8 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
       </Tab.Screen>
       <Tab.Screen name="News" component={NewsScreen} />
       <Tab.Screen name="Portfolio" component={PortfolioScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
       <Tab.Screen name="AgentMode" component={AgentModeScreen} options={{ title: 'Agent Mode' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
