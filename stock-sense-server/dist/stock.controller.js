@@ -19,6 +19,7 @@ const axios_1 = require("axios");
 class FinnhubNewsService {
     apiKey = process.env.FINNHUB_API_KEY;
     baseUrl = 'https://finnhub.io/api/v1/news';
+    companyNewsUrl = 'https://finnhub.io/api/v1/company-news';
     async fetchLatestNews(category = 'general') {
         if (!this.apiKey) {
             throw new Error('Finnhub API key not set');
@@ -30,6 +31,25 @@ class FinnhubNewsService {
         }
         catch (error) {
             return { error: error?.response?.data?.error || 'Failed to fetch news' };
+        }
+    }
+    async fetchPortfolioNews(symbols, from, to) {
+        if (!this.apiKey) {
+            throw new Error('Finnhub API key not set');
+        }
+        try {
+            const fromDate = new Date(from * 1000).toISOString().split('T')[0];
+            const toDate = new Date(to * 1000).toISOString().split('T')[0];
+            const newsPromises = symbols.map(symbol => {
+                const url = `${this.companyNewsUrl}?symbol=${symbol}&from=${fromDate}&to=${toDate}&token=${this.apiKey}`;
+                return axios_1.default.get(url);
+            });
+            const responses = await Promise.all(newsPromises);
+            const allNews = responses.flatMap(response => response.data);
+            return allNews.sort((a, b) => b.datetime - a.datetime);
+        }
+        catch (error) {
+            return { error: error?.response?.data?.error || 'Failed to fetch portfolio news' };
         }
     }
 }
@@ -45,6 +65,22 @@ let StockController = class StockController {
         }
         catch (error) {
             return { error: 'Failed to fetch news data.' };
+        }
+    }
+    async getPortfolioNews(symbols) {
+        if (!symbols) {
+            return { error: 'Symbols parameter is required.' };
+        }
+        try {
+            const oneWeekAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+            const newsData = await this.newsService.fetchPortfolioNews(symbols.split(','), oneWeekAgo, Math.floor(Date.now() / 1000));
+            if ('error' in newsData) {
+                return { error: newsData.error };
+            }
+            return { news: newsData };
+        }
+        catch (error) {
+            return { error: 'Failed to fetch portfolio news data.' };
         }
     }
     async getStockDetails(ticker) {
@@ -80,35 +116,6 @@ let StockController = class StockController {
             return { suggestions: [] };
         }
     }
-    async getIndices() {
-        try {
-            const symbols = ['^IXIC', '^GSPC', '^DJI'];
-            const [nasdaq, sp500, dow] = await Promise.all(symbols.map(sym => yahoo_finance2_1.default.quote(sym)));
-            return {
-                nasdaq: {
-                    symbol: nasdaq.symbol,
-                    name: nasdaq.shortName,
-                    price: nasdaq.regularMarketPrice,
-                    currency: nasdaq.currency,
-                },
-                sp500: {
-                    symbol: sp500.symbol,
-                    name: sp500.shortName,
-                    price: sp500.regularMarketPrice,
-                    currency: sp500.currency,
-                },
-                dow: {
-                    symbol: dow.symbol,
-                    name: dow.shortName,
-                    price: dow.regularMarketPrice,
-                    currency: dow.currency,
-                },
-            };
-        }
-        catch (error) {
-            return { error: 'Failed to fetch index data.' };
-        }
-    }
 };
 exports.StockController = StockController;
 __decorate([
@@ -118,6 +125,13 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], StockController.prototype, "getNews", null);
+__decorate([
+    (0, common_1.Get)('/portfolio-news'),
+    __param(0, (0, common_1.Query)('symbols')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], StockController.prototype, "getPortfolioNews", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)('ticker')),
@@ -132,12 +146,6 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], StockController.prototype, "getStockSuggestions", null);
-__decorate([
-    (0, common_1.Get)('/indices'),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Promise)
-], StockController.prototype, "getIndices", null);
 exports.StockController = StockController = __decorate([
     (0, common_1.Controller)('api/stock-details')
 ], StockController);

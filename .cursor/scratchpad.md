@@ -1,64 +1,73 @@
-# Background and Motivation
-The user wants to add a watchlist feature to the app, allowing users to input stocks they are interested in (but do not own). This watchlist should:
-- Allow users to add stocks by ticker and company name (no quantity or price input)
-- Display ticker, name, and current price for each watchlist item
-- Allow users to switch between portfolio and watchlist sections from the top of the page, both following the same styling
+# Portfolio News Feature
 
-# Key Challenges and Analysis
-- No existing code for watchlist in the frontend or backend
-- Need to create a new Supabase table for watchlist (with only id, user_id, ticker, company_name, date_added)
-- UI/UX: Must match the portfolio section and allow easy switching
-- Code reuse: PortfolioScreen logic for suggestions, price fetching, and styling should be reused for watchlist
-- Navigation: Should be intuitive and not disrupt existing flows
-- Test coverage: Need to ensure both portfolio and watchlist are tested
+## Background and Motivation
+- Current implementation shows general market news
+- Need to add portfolio-specific news section
+- Will use Finnhub API to fetch news for user's portfolio stocks
+- News will be divided into two sections: Portfolio News and Market News
 
-# High-level Task Breakdown
+## Key Challenges and Analysis
+1. Backend Modifications
+   - Need to add endpoint for fetching portfolio news
+   - Need to handle multiple stock symbols in a single request
+   - Finnhub API handles date filtering natively
 
-## 1. Database
-- [ ] Create a new Supabase table `watchlist` with fields: id, user_id, ticker, company_name, date_added (no quantity or price)
-  - Success: Table exists and can be queried/inserted from Supabase dashboard
+2. Frontend Modifications
+   - Need to modify NewsScreen to show two sections
+   - Need to fetch portfolio stocks from Supabase
+   - Need to fetch and display portfolio news
+   - Need to maintain existing market news functionality
 
-## 2. Data Model & API
-- [ ] Define TypeScript interface for watchlist item (id, user_id, ticker, company_name, date_added)
-  - Success: Interface is used in code and type checks pass
+3. Data Management
+   - Portfolio data is stored in Supabase 'portfolio' table
+   - Each portfolio item has: id, user_id, ticker, shares, buy_price, company_name
+   - Need to handle potential rate limiting from Finnhub API
+   - Consider caching strategies for news data
 
-## 3. UI/UX & Navigation
-- [ ] Update PortfolioScreen to add a toggle (e.g. segmented control or tabs) at the top to switch between Portfolio and Watchlist
-  - Success: User can switch between sections, UI matches existing style
-- [ ] Create Watchlist section/component that:
-  - [ ] Allows adding a stock by ticker (with autocomplete and company name, reusing suggestion logic)
-  - [ ] Displays watchlist as a list: ticker, company name, current price (no quantity/price input or display)
-  - [ ] Allows removing a stock from watchlist
-  - Success: All UI/UX matches portfolio section, but with watchlist logic
+## High-level Task Breakdown
 
-## 4. Logic & State Management
-- [ ] Fetch watchlist from Supabase for the logged-in user
-- [ ] Add stock to watchlist (insert into Supabase)
-- [ ] Remove stock from watchlist (delete from Supabase)
-- [ ] Fetch and display current price for each watchlist stock (reuse price logic)
-  - Success: All CRUD operations work, prices display correctly
+### Backend Tasks
+1. Add new endpoint `/api/stock-details/portfolio-news`
+   - Accept portfolio stock symbols as query parameter
+   - Fetch news for each symbol from Finnhub
+   - Use Finnhub's native date filtering (from=, to= parameters)
+   - Return aggregated news data
 
-## 5. Testing
-- [ ] Write tests for watchlist add/remove/display logic
-- [ ] Manually test switching, adding, removing, and price display for both sections
-  - Success: All tests pass, manual QA confirms correct behavior
+2. Update existing news endpoint
+   - Maintain existing functionality
+   - Consider adding optional date range filtering
 
-# Project Status Board
-- [x] Database: watchlist table created
-- [x] Data model/interface defined
-- [x] UI toggle for Portfolio/Watchlist
-- [x] Watchlist add/display/remove logic
-- [ ] Price fetching for watchlist
-- [ ] Tests and manual QA
+### Frontend Tasks
+1. Modify NewsScreen component
+   - Add portfolio news section
+   - Fetch portfolio stocks from Supabase using user_id
+   - Make API call to portfolio news endpoint
+   - Display news in two sections
+   - Maintain existing market news functionality
 
-# Executor's Feedback or Assistance Requests
-- The watchlist table was created in Supabase with fields: id (uuid, PK), user_id (uuid), ticker (text), company_name (text), date_added (timestamptz).
-- No foreign key constraint to a users table was added, as there is no users table in the current DB schema. user_id is stored as uuid only.
-- The WatchlistItem TypeScript interface was added to PortfolioScreen.tsx, matching the DB schema.
-- The UI toggle for switching between Portfolio and Watchlist is implemented at the top of PortfolioScreen. The Watchlist section is now implemented: users can add stocks (with suggestions), display their watchlist (ticker, name, current price), and remove stocks, all matching the Portfolio section's style.
+2. Add loading states and error handling
+   - Separate loading states for portfolio and market news
+   - Error handling for portfolio news API calls
+   - Refresh functionality for both sections
 
-# Lessons
-- Read the file before you try to edit it.
-- If there are vulnerabilities that appear in the terminal, run npm audit before proceeding
-- Always ask before using the -force git command
-- Include info useful for debugging in the program output.
+3. UI Improvements
+   - Clear visual separation between portfolio and market news
+   - Add section headers
+   - Maintain consistent news item layout
+
+## Project Status Board
+- [ ] Backend: Portfolio news endpoint
+- [ ] Backend: Date range filtering
+- [ ] Frontend: Portfolio news section
+- [ ] Frontend: Data fetching and display
+- [ ] Frontend: UI improvements
+- [ ] Testing and validation
+
+## Executor’s Feedback or Assistance Requests
+- Need to verify Finnhub API rate limits
+- Finnhub API handles date filtering natively (from=, to= parameters)
+
+## Lessons
+- Always check API rate limits before implementation
+- Consider caching strategies for news data
+- Handle edge cases for empty portfolio

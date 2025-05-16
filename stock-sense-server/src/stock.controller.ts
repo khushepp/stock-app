@@ -5,6 +5,7 @@ import axios from 'axios';
 class FinnhubNewsService {
   private apiKey = process.env.FINNHUB_API_KEY;
   private baseUrl = 'https://finnhub.io/api/v1/news';
+  private companyNewsUrl = 'https://finnhub.io/api/v1/company-news';
 
   async fetchLatestNews(category: string = 'general') {
     if (!this.apiKey) {
@@ -17,6 +18,29 @@ class FinnhubNewsService {
     } catch (error: any) {
       // Handle rate limit or API errors
       return { error: error?.response?.data?.error || 'Failed to fetch news' };
+    }
+  }
+
+  async fetchPortfolioNews(symbols: string[], from: number, to: number) {
+    if (!this.apiKey) {
+      throw new Error('Finnhub API key not set');
+    }
+    try {
+      // Convert Unix timestamp to YYYY-MM-DD format
+      const fromDate = new Date(from * 1000).toISOString().split('T')[0];
+      const toDate = new Date(to * 1000).toISOString().split('T')[0];
+      
+      const newsPromises = symbols.map(symbol => {
+        const url = `${this.companyNewsUrl}?symbol=${symbol}&from=${fromDate}&to=${toDate}&token=${this.apiKey}`;
+        return axios.get(url);
+      });
+      
+      const responses = await Promise.all(newsPromises);
+      const allNews = responses.flatMap(response => response.data);
+      // Sort news by datetime in descending order
+      return allNews.sort((a, b) => b.datetime - a.datetime);
+    } catch (error: any) {
+      return { error: error?.response?.data?.error || 'Failed to fetch portfolio news' };
     }
   }
 }
@@ -35,6 +59,29 @@ export class StockController {
       return { news: newsData };
     } catch (error) {
       return { error: 'Failed to fetch news data.' };
+    }
+  }
+
+  @Get('/portfolio-news')
+  async getPortfolioNews(@Query('symbols') symbols: string) {
+    if (!symbols) {
+      return { error: 'Symbols parameter is required.' };
+    }
+    
+    try {
+      const oneWeekAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+      const newsData = await this.newsService.fetchPortfolioNews(
+        symbols.split(','),
+        oneWeekAgo,
+        Math.floor(Date.now() / 1000)
+      );
+      
+      if ('error' in newsData) {
+        return { error: newsData.error };
+      }
+      return { news: newsData };
+    } catch (error) {
+      return { error: 'Failed to fetch portfolio news data.' };
     }
   }
 
@@ -70,36 +117,6 @@ export class StockController {
       return { suggestions };
     } catch (error) {
       return { suggestions: [] };
-    }
-  }
-
-  @Get('/indices')
-  async getIndices() {
-    try {
-      const symbols = ['^IXIC', '^GSPC', '^DJI'];
-      const [nasdaq, sp500, dow] = await Promise.all(symbols.map(sym => yahooFinance.quote(sym)));
-      return {
-        nasdaq: {
-          symbol: nasdaq.symbol,
-          name: nasdaq.shortName,
-          price: nasdaq.regularMarketPrice,
-          currency: nasdaq.currency,
-        },
-        sp500: {
-          symbol: sp500.symbol,
-          name: sp500.shortName,
-          price: sp500.regularMarketPrice,
-          currency: sp500.currency,
-        },
-        dow: {
-          symbol: dow.symbol,
-          name: dow.shortName,
-          price: dow.regularMarketPrice,
-          currency: dow.currency,
-        },
-      };
-    } catch (error) {
-      return { error: 'Failed to fetch index data.' };
     }
   }
 } 

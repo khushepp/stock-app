@@ -424,40 +424,57 @@ const PortfolioScreen = () => {
       if (!deleteError) {
         setWatchlist(prev => prev.filter(w => w.id !== item.id));
       }
-    } catch (err) {}
-    setRemoveWatchlistLoading(false);
-    setSelectedWatchlistToRemove(null);
+    } catch (err) {
+      console.error('Error removing from watchlist:', err);
+    } finally {
+      setRemoveWatchlistLoading(false);
+      setSelectedWatchlistToRemove(null);
+    }
   };
 
   return (
-  <View style={styles.container}>
-      {/* Section Toggle */}
-      <View style={styles.sectionToggleRow}>
-        <TouchableOpacity
-          style={[styles.sectionToggleButton, section === 'portfolio' && styles.sectionToggleButtonActive]}
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>YOUR STOCKS</Text>
+      </View>
+      
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[styles.tabButton, section === 'portfolio' && styles.activeTabButton]}
           onPress={() => setSection('portfolio')}
         >
-          <Text style={[styles.sectionToggleText, section === 'portfolio' && styles.sectionToggleTextActive]}>Portfolio</Text>
+          <Text style={[styles.tabText, section === 'portfolio' && styles.activeTabText]}>
+            Portfolio
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.sectionToggleButton, section === 'watchlist' && styles.sectionToggleButtonActive]}
+        <TouchableOpacity 
+          style={[styles.tabButton, section === 'watchlist' && styles.activeTabButton]}
           onPress={() => setSection('watchlist')}
         >
-          <Text style={[styles.sectionToggleText, section === 'watchlist' && styles.sectionToggleTextActive]}>Watchlist</Text>
+          <Text style={[styles.tabText, section === 'watchlist' && styles.activeTabText]}>
+            Watchlist
+          </Text>
         </TouchableOpacity>
       </View>
-      {/* Existing header and content */}
-      {section === 'portfolio' && (
+
+      {/* Content based on active tab */}
+      <View style={styles.contentContainer}>
+        {section === 'portfolio' && (
         <>
-      <Text style={styles.header}>Your Portfolio</Text>
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-          <Text style={styles.addButtonText}>ADD PURCHASED STOCK</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.removeButton} onPress={() => setRemoveModalVisible(true)}>
-          <Text style={styles.removeButtonText}>REMOVE SOLD STOCK</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+              <Icon name="add" size={16} color="#fff" />
+              <Text style={styles.addButtonText}>ADD PURCHASED STOCK</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.removeButton} 
+              onPress={() => setRemoveModalVisible(true)}
+            >
+              <Icon name="remove" size={16} color="#fff" />
+              <Text style={styles.removeButtonText}>REMOVE SOLD STOCK</Text>
+            </TouchableOpacity>
+          </View>
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -799,7 +816,7 @@ const PortfolioScreen = () => {
       )}
       {section === 'watchlist' && (
         <>
-          <Text style={styles.header}>Your Watchlist</Text>
+    
           <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.addButton} onPress={() => setAddWatchlistModalVisible(true)}>
               <Text style={styles.addButtonText}>ADD TO WATCHLIST</Text>
@@ -926,22 +943,55 @@ const PortfolioScreen = () => {
           </Modal>
         </>
       )}
+    </View>
   </View>
-);
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
     backgroundColor: '#f5f5f5',
   },
   header: {
-    fontSize: 16,
+    backgroundColor: '#2e7d32',
+    padding: 16,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: 'white',
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#2e7d32',
-    marginBottom: 16,
-    alignSelf: 'center',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#2e7d32',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTabButton: {
+    borderBottomColor: 'white',
+  },
+  tabText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  contentContainer: {
+    flex: 1,
+    width: '100%',
+    padding: 12,
   },
   inputRow: {
     flexDirection: 'row',
@@ -974,10 +1024,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 7,
-    backgroundColor: '#e8f5e9',
-    borderRadius: 6,
-    marginBottom: 4,
+    padding: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   ticker: {
     fontWeight: 'bold',
@@ -1031,72 +1086,57 @@ const styles = StyleSheet.create({
   addButton: {
     flex: 1,
     backgroundColor: '#2e7d32',
-    paddingVertical: 7,
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    marginRight: 8,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    minHeight: 32,
+    marginRight: 6,
+    elevation: 2,
+    shadowColor: '#2e7d32',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    minHeight: 40,
   },
   addButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 11,
-    letterSpacing: 0.5,
+    fontWeight: '600',
+    fontSize: 12,
+    letterSpacing: 0.3,
+    marginLeft: 4,
   },
   removeButton: {
     flex: 1,
-    backgroundColor: '#c62828',
-    paddingVertical: 7,
+    backgroundColor: '#e53935',
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    marginLeft: 8,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    minHeight: 32,
+    marginLeft: 6,
+    elevation: 2,
+    shadowColor: '#e53935',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    minHeight: 40,
   },
   removeButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 11,
-    letterSpacing: 0.5,
+    fontWeight: '600',
+    fontSize: 12,
+    letterSpacing: 0.3,
+    marginLeft: 4,
   },
   centeredQtyCell: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sectionToggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionToggleButton: {
-    flex: 1,
-    paddingVertical: 8,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 8,
-    marginHorizontal: 4,
-    alignItems: 'center',
-  },
-  sectionToggleButtonActive: {
-    backgroundColor: '#2e7d32',
-  },
-  sectionToggleText: {
-    color: '#2e7d32',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  sectionToggleTextActive: {
-    color: '#fff',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ffebee',
   },
   deleteButton: {
     width: 28,
