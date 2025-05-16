@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { StockProvider } from './context/StockContext';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, Button, StyleSheet, TextInput, Alert, ActivityIndicator, TouchableOpacity, Image, ScrollView } from 'react-native';
@@ -334,22 +335,24 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {session ? (
-          <Stack.Screen name="MainTabs">
-            {props => <MainTabs {...props} onLogout={handleLogout} />}
-          </Stack.Screen>
-        ) : (
-          <>
-            <Stack.Screen name="Login">
-              {props => <LoginScreen {...props} onAuth={() => setSession(true)} />}
+    <StockProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {session ? (
+            <Stack.Screen name="MainTabs">
+              {props => <MainTabs {...props} onLogout={handleLogout} />}
             </Stack.Screen>
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+          ) : (
+            <>
+              <Stack.Screen name="Login">
+                {props => <LoginScreen {...props} onAuth={() => setSession(true)} />}
+              </Stack.Screen>
+              <Stack.Screen name="SignUp" component={SignUpScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </StockProvider>
   );
 }
 

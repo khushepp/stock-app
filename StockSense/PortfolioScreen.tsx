@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, Button, FlatList, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { supabase } from './App';
+import StockDetailsOverlay from './components/StockDetailsOverlay';
+import { useStockContext } from './context/StockContext';
 
 // Define the type for a portfolio item
 interface PortfolioItem {
@@ -82,6 +84,19 @@ const PortfolioScreen = () => {
   const watchlistDebounceTimeout = useRef<any>(null);
   const [removeWatchlistLoading, setRemoveWatchlistLoading] = useState(false);
   const [selectedWatchlistToRemove, setSelectedWatchlistToRemove] = useState<WatchlistItem | null>(null);
+  const { showStockDetails } = useStockContext();
+
+  // Function to handle stock press
+  const handleStockPress = (stock: PortfolioItem) => {
+    showStockDetails({
+      id: stock.id,
+      symbol: stock.ticker,
+      name: stock.company_name || '',
+      currentPrice: 0, // We'll update this with real data later
+      change: 0,       // We'll update this with real data later
+      changePercent: 0 // We'll update this with real data later
+    });
+  };
 
   // Fetch user and portfolio on mount
   useEffect(() => {
@@ -773,12 +788,16 @@ const PortfolioScreen = () => {
             const ticker = item.ticker.toUpperCase();
             const priceInfo = currentPrices[ticker];
             return (
-              <TouchableOpacity onPress={() => {
-                setEditStock(item);
-                setEditQuantity(item.shares.toString());
-                setEditPrice(item.buy_price.toString());
-                setEditModalVisible(true);
-              }}>
+              <TouchableOpacity 
+                onLongPress={() => {
+                  setEditStock(item);
+                  setEditQuantity(item.shares.toString());
+                  setEditPrice(item.buy_price.toString());
+                  setEditModalVisible(true);
+                }}
+                onPress={() => handleStockPress(item)}
+                delayLongPress={300}
+              >
                 <View style={styles.stockRow}>
                   <View style={{ flex: 2 }}>
                     <Text style={styles.ticker}>{item.ticker}</Text>
@@ -814,6 +833,8 @@ const PortfolioScreen = () => {
       )}
         </>
       )}
+      
+      
       {section === 'watchlist' && (
         <>
     
@@ -883,8 +904,19 @@ const PortfolioScreen = () => {
                 return (
                   <View style={styles.stockRow}>
                     <View style={{ flex: 2 }}>
-                      <Text style={styles.ticker}>{item.ticker}</Text>
-                      <Text style={styles.companyName}>{item.company_name}</Text>
+                      <TouchableOpacity 
+                        onPress={() => handleStockPress({
+                          id: item.id,
+                          ticker: item.ticker,
+                          company_name: item.company_name,
+                          shares: 0, // Not applicable for watchlist
+                          buy_price: 0, // Not applicable for watchlist
+                          user_id: '' // Not applicable for watchlist
+                        })}
+                      >
+                        <Text style={styles.ticker}>{item.ticker}</Text>
+                        <Text style={styles.companyName}>{item.company_name}</Text>
+                      </TouchableOpacity>
                     </View>
                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
                       {priceInfo ? (
@@ -900,7 +932,10 @@ const PortfolioScreen = () => {
                       ) : null}
                     </View>
                     <TouchableOpacity 
-                      onPress={() => setSelectedWatchlistToRemove(item)}
+                      onPress={(e) => {
+                        e.stopPropagation(); // Prevent triggering the parent TouchableOpacity
+                        setSelectedWatchlistToRemove(item);
+                      }}
                       style={styles.deleteButton}
                     >
                       <Icon name="delete" size={16} color="#c62828" />
@@ -944,6 +979,8 @@ const PortfolioScreen = () => {
         </>
       )}
     </View>
+    {/* Stock Details Overlay */}
+    <StockDetailsOverlay />
   </View>
   );
 };
