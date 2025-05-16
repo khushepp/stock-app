@@ -89,15 +89,86 @@ let StockController = class StockController {
         }
         try {
             const quote = await yahoo_finance2_1.default.quote(ticker);
-            return {
+            const quoteSummary = await yahoo_finance2_1.default.quoteSummary(ticker, {
+                modules: ['price', 'summaryDetail', 'financialData', 'defaultKeyStatistics']
+            });
+            const summaryDetail = quoteSummary.summaryDetail;
+            const financialData = quoteSummary.financialData;
+            const defaultKeyStatistics = quoteSummary.defaultKeyStatistics;
+            const priceData = quoteSummary.price;
+            const summaryProfile = quoteSummary.summaryProfile;
+            const price = quote.regularMarketPrice;
+            const previousClose = summaryDetail?.regularMarketPreviousClose ?? quote.regularMarketPreviousClose;
+            const open = summaryDetail?.regularMarketOpen ?? quote.regularMarketOpen;
+            const dayHigh = summaryDetail?.regularMarketDayHigh ?? quote.regularMarketDayHigh;
+            const dayLow = summaryDetail?.regularMarketDayLow ?? quote.regularMarketDayLow;
+            const volume = summaryDetail?.regularMarketVolume ?? quote.regularMarketVolume;
+            const avgVolume = summaryDetail?.averageDailyVolume10Day ?? summaryDetail?.averageVolume;
+            const fiftyTwoWeekHigh = summaryDetail?.fiftyTwoWeekHigh;
+            const fiftyTwoWeekLow = summaryDetail?.fiftyTwoWeekLow;
+            const marketCap = summaryDetail?.marketCap;
+            const trailingPE = summaryDetail?.trailingPE;
+            const forwardPE = summaryDetail?.forwardPE;
+            const priceToBook = defaultKeyStatistics?.priceToBook;
+            const dividendYield = summaryDetail?.dividendYield ? summaryDetail.dividendYield * 100 : undefined;
+            const dividendRate = summaryDetail?.dividendRate;
+            const payoutRatio = summaryDetail?.payoutRatio ? summaryDetail.payoutRatio * 100 : undefined;
+            const longName = summaryProfile?.name || priceData?.longName || quote.longName || quote.shortName || ticker;
+            const sector = summaryProfile?.sector;
+            const industry = summaryProfile?.industry;
+            const website = summaryProfile?.website;
+            const longBusinessSummary = summaryProfile?.longBusinessSummary;
+            const eps = defaultKeyStatistics?.trailingEps;
+            const epsForward = defaultKeyStatistics?.forwardEps;
+            const beta = summaryDetail?.beta;
+            const response = {
+                id: ticker.toLowerCase(),
                 symbol: quote.symbol,
-                name: quote.shortName,
-                price: quote.regularMarketPrice,
-                currency: quote.currency,
+                name: longName,
+                currentPrice: price,
+                change: quote.regularMarketChange || 0,
+                changePercent: quote.regularMarketChangePercent || 0,
+                currency: quote.currency || 'USD',
+                regularMarketPreviousClose: previousClose,
+                regularMarketOpen: open,
+                regularMarketDayHigh: dayHigh,
+                regularMarketDayLow: dayLow,
+                regularMarketVolume: volume,
+                averageDailyVolume3Month: avgVolume,
+                fiftyTwoWeekHigh,
+                fiftyTwoWeekLow,
+                marketCap,
+                trailingPE,
+                forwardPE,
+                priceToBook,
+                dividendYield,
+                dividendRate,
+                payoutRatio,
+                trailingAnnualDividendYield: dividendYield ? dividendYield / 100 : undefined,
+                trailingAnnualDividendRate: dividendRate,
+                sector,
+                industry,
+                website,
+                longBusinessSummary,
+                epsTrailingTwelveMonths: eps,
+                epsForward,
+                beta,
+                exchange: priceData?.exchange || quote.exchange,
+                exchangeName: priceData?.exchangeName,
+                marketState: quote.marketState,
+                quoteType: quote.quoteType,
+                fiftyDayAverage: summaryDetail?.fiftyDayAverage,
+                twoHundredDayAverage: summaryDetail?.twoHundredDayAverage,
+                lastUpdated: new Date().toISOString()
             };
+            return response;
         }
         catch (error) {
-            return { error: 'Invalid ticker symbol or data not found.' };
+            console.error('Error fetching stock details:', error);
+            return {
+                error: 'Failed to fetch stock details',
+                details: error.message
+            };
         }
     }
     async getStockSuggestions(query) {

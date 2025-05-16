@@ -90,16 +90,132 @@ export class StockController {
     if (!ticker) {
       return { error: 'Ticker is required.' };
     }
+    
     try {
+      // Fetch quote data with proper typing
       const quote = await yahooFinance.quote(ticker);
-      return {
+      
+      // Fetch additional details using yahooFinance.quoteSummary
+      const quoteSummary = await yahooFinance.quoteSummary(ticker, {
+        modules: ['price', 'summaryDetail', 'financialData', 'defaultKeyStatistics']
+      });
+      
+      // Extract data from quoteSummary if available
+      const summaryDetail = quoteSummary.summaryDetail;
+      const financialData = quoteSummary.financialData;
+      const defaultKeyStatistics = quoteSummary.defaultKeyStatistics;
+      const priceData = quoteSummary.price;
+      const summaryProfile = quoteSummary.summaryProfile;
+      
+      // Extract market data with fallbacks
+      const price = quote.regularMarketPrice;
+      const previousClose = summaryDetail?.regularMarketPreviousClose ?? quote.regularMarketPreviousClose;
+      const open = summaryDetail?.regularMarketOpen ?? quote.regularMarketOpen;
+      const dayHigh = summaryDetail?.regularMarketDayHigh ?? quote.regularMarketDayHigh;
+      const dayLow = summaryDetail?.regularMarketDayLow ?? quote.regularMarketDayLow;
+      const volume = summaryDetail?.regularMarketVolume ?? quote.regularMarketVolume;
+      const avgVolume = summaryDetail?.averageDailyVolume10Day ?? summaryDetail?.averageVolume;
+      
+      // Extract 52-week range
+      const fiftyTwoWeekHigh = summaryDetail?.fiftyTwoWeekHigh;
+      const fiftyTwoWeekLow = summaryDetail?.fiftyTwoWeekLow;
+      
+      // Extract valuation metrics
+      const marketCap = summaryDetail?.marketCap;
+      const trailingPE = summaryDetail?.trailingPE;
+      const forwardPE = summaryDetail?.forwardPE;
+      const priceToBook = defaultKeyStatistics?.priceToBook;
+      
+      // Extract dividend data
+      const dividendYield = summaryDetail?.dividendYield ? summaryDetail.dividendYield * 100 : undefined;
+      const dividendRate = summaryDetail?.dividendRate;
+      const payoutRatio = summaryDetail?.payoutRatio ? summaryDetail.payoutRatio * 100 : undefined;
+      
+      // Extract company information
+      const longName = summaryProfile?.name || priceData?.longName || quote.longName || quote.shortName || ticker;
+      const sector = summaryProfile?.sector;
+      const industry = summaryProfile?.industry;
+      const website = summaryProfile?.website;
+      const longBusinessSummary = summaryProfile?.longBusinessSummary;
+      
+      // Extract earnings data
+      const eps = defaultKeyStatistics?.trailingEps;
+      const epsForward = defaultKeyStatistics?.forwardEps;
+      
+      // Extract beta
+      const beta = summaryDetail?.beta;
+      
+      // Prepare the response object
+      const response = {
+        // Basic info
+        id: ticker.toLowerCase(), // Use ticker as ID if not available
         symbol: quote.symbol,
-        name: quote.shortName,
-        price: quote.regularMarketPrice,
-        currency: quote.currency,
+        name: longName,
+        currentPrice: price,
+        change: quote.regularMarketChange || 0,
+        changePercent: quote.regularMarketChangePercent || 0,
+        currency: quote.currency || 'USD',
+        
+        // Market data
+        regularMarketPreviousClose: previousClose,
+        regularMarketOpen: open,
+        regularMarketDayHigh: dayHigh,
+        regularMarketDayLow: dayLow,
+        regularMarketVolume: volume,
+        averageDailyVolume3Month: avgVolume,
+        
+        // 52-week range
+        fiftyTwoWeekHigh,
+        fiftyTwoWeekLow,
+        
+        // Valuation metrics
+        marketCap,
+        trailingPE,
+        forwardPE,
+        priceToBook,
+        
+        // Dividends
+        dividendYield,
+        dividendRate,
+        payoutRatio,
+        trailingAnnualDividendYield: dividendYield ? dividendYield / 100 : undefined,
+        trailingAnnualDividendRate: dividendRate,
+        
+        // Company info
+        sector,
+        industry,
+        website,
+        longBusinessSummary,
+        
+        // Earnings
+        epsTrailingTwelveMonths: eps,
+        epsForward,
+        
+        // Risk
+        beta,
+        
+        // Additional fields
+        exchange: priceData?.exchange || quote.exchange,
+        exchangeName: priceData?.exchangeName,
+        marketState: quote.marketState,
+        quoteType: quote.quoteType,
+        
+        // Averages
+        fiftyDayAverage: summaryDetail?.fiftyDayAverage,
+        twoHundredDayAverage: summaryDetail?.twoHundredDayAverage,
+        
+        // Timestamp
+        lastUpdated: new Date().toISOString()
       };
+      
+      return response;
+      
     } catch (error) {
-      return { error: 'Invalid ticker symbol or data not found.' };
+      console.error('Error fetching stock details:', error);
+      return { 
+        error: 'Failed to fetch stock details',
+        details: error.message 
+      };
     }
   }
 

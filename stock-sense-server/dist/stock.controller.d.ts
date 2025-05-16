@@ -15,17 +15,50 @@ export declare class StockController {
         error?: undefined;
     }>;
     getStockDetails(ticker: string): Promise<{
-        error: string;
-        symbol?: undefined;
-        name?: undefined;
-        price?: undefined;
-        currency?: undefined;
-    } | {
+        id: string;
         symbol: string;
-        name: string | undefined;
-        price: number | undefined;
-        currency: string | undefined;
-        error?: undefined;
+        name: string;
+        currentPrice: number | undefined;
+        change: number;
+        changePercent: number;
+        currency: string;
+        regularMarketPreviousClose: number | undefined;
+        regularMarketOpen: number | undefined;
+        regularMarketDayHigh: number | undefined;
+        regularMarketDayLow: number | undefined;
+        regularMarketVolume: number | undefined;
+        averageDailyVolume3Month: number | undefined;
+        fiftyTwoWeekHigh: number | undefined;
+        fiftyTwoWeekLow: number | undefined;
+        marketCap: number | undefined;
+        trailingPE: number | undefined;
+        forwardPE: number | undefined;
+        priceToBook: number | undefined;
+        dividendYield: number | undefined;
+        dividendRate: number | undefined;
+        payoutRatio: number | undefined;
+        trailingAnnualDividendYield: number | undefined;
+        trailingAnnualDividendRate: number | undefined;
+        sector: string | undefined;
+        industry: string | undefined;
+        website: string | undefined;
+        longBusinessSummary: string | undefined;
+        epsTrailingTwelveMonths: number | undefined;
+        epsForward: number | undefined;
+        beta: number | undefined;
+        exchange: string;
+        exchangeName: string | undefined;
+        marketState: "REGULAR" | "CLOSED" | "PRE" | "PREPRE" | "POST" | "POSTPOST";
+        quoteType: "CRYPTOCURRENCY" | "CURRENCY" | "ETF" | "EQUITY" | "FUTURE" | "INDEX" | "MUTUALFUND" | "OPTION";
+        fiftyDayAverage: number | undefined;
+        twoHundredDayAverage: number | undefined;
+        lastUpdated: string;
+    } | {
+        error: string;
+        details?: undefined;
+    } | {
+        error: string;
+        details: any;
     }>;
     getStockSuggestions(query: string): Promise<{
         suggestions: {
