@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StockProvider } from './context/StockContext';
+import { StockProvider, useStockContext } from './context/StockContext';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, Button, StyleSheet, TextInput, Alert, TouchableOpacity, Image, ScrollView, ActivityIndicator } from 'react-native';
@@ -13,6 +13,7 @@ import NewsScreen from './NewsScreen';
 import PortfolioScreen from './PortfolioScreen';
 import ProfileScreen from './ProfileScreen';
 import AgentModeScreen from './AgentModeScreen';
+import StockDetailsOverlay from './components/StockDetailsOverlay';
 
 // Setup URL polyfill for React Native
 setupURLPolyfill();
@@ -172,10 +173,11 @@ export function HomeScreen({ route, navigation }: HomeScreenProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceTimeout = React.useRef<any>(null);
 
+  const { showStockDetails } = useStockContext();
+
   const handleFetchStock = async () => {
     setLoading(true);
     setError('');
-    setStock(null);
     try {
       // Get JWT from Supabase
       const session = await supabase.auth.session();
@@ -199,7 +201,7 @@ export function HomeScreen({ route, navigation }: HomeScreenProps) {
       if (!response.ok) {
         setError(data.error || 'Failed to fetch stock details.');
       } else {
-        setStock(data);
+        showStockDetails(data);
       }
     } catch (err) {
       setError('Network error.');
@@ -295,14 +297,11 @@ export function HomeScreen({ route, navigation }: HomeScreenProps) {
       <TouchableOpacity style={styles.button} onPress={handleFetchStock} disabled={loading || !ticker}>
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Get Stock Details</Text>}
       </TouchableOpacity>
-      {/* Display Stock Details or Error */}
+      {/* Display Error */}
       {error ? <Text style={{ color: 'red', marginVertical: 8 }}>{error}</Text> : null}
-      {stock && (
-        <View style={{ marginVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 20, fontWeight: 'bold' }}>{stock.symbol} - {stock.name}</Text>
-          <Text style={{ fontSize: 18 }}>Price: {stock.price} {stock.currency}</Text>
-        </View>
-      )}
+      
+      {/* Stock Details Overlay */}
+      <StockDetailsOverlay />
     </View>
   );
 }

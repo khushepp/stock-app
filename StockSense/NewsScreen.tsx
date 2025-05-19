@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Linking, RefreshControl, Image, SafeAreaView, Button } from 'react-native';
 import { supabase } from './App';
+import { useStockContext } from './context/StockContext';
+import StockDetailsOverlay from './components/StockDetailsOverlay';
 
 const BACKEND_URL = 'http://10.0.2.2:3000/api/stock-details'; // Base URL for API endpoints
 
@@ -18,6 +20,7 @@ const NewsScreen = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'portfolio' | 'watchlist' | 'market'>('portfolio'); // Track active tab
   const [companyNames, setCompanyNames] = useState<Record<string, string>>({}); // Cache for company names
+  const { showStockDetails } = useStockContext();
 
   // Function to preload company names from portfolio and watchlist
   const preloadCompanyNames = useCallback(async (userId: string) => {
@@ -416,11 +419,42 @@ const NewsScreen = () => {
               // Create a unique key using multiple identifiers
               const uniqueKey = `company-${ticker}-${idx}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
               return (
-                <View key={uniqueKey} style={styles.companyBadge}>
+                <TouchableOpacity 
+                  key={uniqueKey} 
+                  style={styles.companyBadge}
+                  onPress={async () => {
+                    try {
+                      const session = await supabase.auth.session();
+                      const jwt = session?.access_token;
+                      
+                      if (!jwt) {
+                        console.error('User not authenticated');
+                        return;
+                      }
+                      
+                      const response = await fetch(`http://10.0.2.2:3000/api/stock-details`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${jwt}`,
+                        },
+                        body: JSON.stringify({ ticker }),
+                      });
+                      
+                      if (response.ok) {
+                        const data = await response.json();
+                        showStockDetails(data);
+                      }
+                    } catch (error) {
+                      console.error('Error fetching stock details:', error);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.companyText}>
                     {displayName}
                   </Text>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -481,7 +515,8 @@ const NewsScreen = () => {
   }
 
   return (
-    <SafeAreaView style={styles.listContainer}>
+    <>
+      <SafeAreaView style={styles.listContainer}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>NEWS</Text>
         
@@ -615,7 +650,9 @@ const NewsScreen = () => {
           </View>
         )}
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+      <StockDetailsOverlay />
+    </>
   );
 };
 
@@ -706,15 +743,15 @@ const styles = StyleSheet.create({
   },
   newsItem: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,  // Reduced from 14
-    marginBottom: 10,  // Reduced from 12
-    marginHorizontal: 2,  // Added small horizontal margin
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
     elevation: 2,
+    width: '100%',
   },
   newsTitle: {
     fontSize: 15,  // Reduced from 18
@@ -738,20 +775,31 @@ const styles = StyleSheet.create({
   companyContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 8,
+    marginBottom: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   companyBadge: {
-    backgroundColor: '#e8f5e9',
-    borderRadius: 10,  // Slightly smaller border radius
-    paddingHorizontal: 8,  // Reduced horizontal padding
-    paddingVertical: 3,  // Reduced vertical padding
-    marginRight: 5,  // Reduced right margin
-    marginBottom: 5,  // Added bottom margin for better spacing
-    alignSelf: 'flex-start',  // Better alignment for small badges
+    backgroundColor: '#e3f2fd',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginHorizontal: 3,
+    marginBottom: 8,
+    minWidth: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#bbdefb',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 1,
   },
   companyText: {
-    color: '#2e7d32',
-    fontSize: 11,  // Reduced from 14
+    fontSize: 12,
     fontWeight: '500',
   },
   newsSource: {
