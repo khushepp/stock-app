@@ -5,6 +5,27 @@ import { supabase } from './App';
 import StockDetailsOverlay from './components/StockDetailsOverlay';
 import { useStockContext } from './context/StockContext';
 
+// Currency symbol mapping
+const CURRENCY_SYMBOLS: { [key: string]: string } = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  CNY: '¥',
+  INR: '₹',
+  AUD: 'A$',
+  CAD: 'C$',
+  CHF: 'CHF',
+  HKD: 'HK$',
+  SGD: 'S$',
+  // Add more currency symbols as needed
+};
+
+// Helper function to get currency symbol
+const getCurrencySymbol = (currencyCode: string = 'USD'): string => {
+  return CURRENCY_SYMBOLS[currencyCode] || currencyCode;
+};
+
 // Define the type for a portfolio item
 interface PortfolioItem {
   id: string;
@@ -156,7 +177,13 @@ const PortfolioScreen = () => {
           const session = supabase.auth.session();
           const jwt = session?.access_token;
           if (!jwt) {
-            setCurrentPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: 'Not authenticated' } }));
+            setCurrentPrices(prev => ({ ...prev, [ticker]: { 
+              ...prev[ticker], 
+              loading: false, 
+              error: 'Not authenticated',
+              price: undefined,
+              currency: 'USD'
+            } }));
             return;
           }
           const backendUrl = 'http://10.0.2.2:3000/api/stock-details';
@@ -169,10 +196,33 @@ const PortfolioScreen = () => {
             body: JSON.stringify({ ticker }),
           });
           const data = await response.json();
+          
           if (!response.ok || data.error) {
-            setCurrentPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: data.error || 'Failed to fetch price' } }));
+            console.error('Error fetching price for', ticker, ':', data.error || 'Unknown error');
+            setCurrentPrices(prev => ({ 
+              ...prev, 
+              [ticker]: { 
+                ...prev[ticker], 
+                loading: false, 
+                error: data.error || 'Failed to fetch price',
+                price: undefined,
+                currency: data.currency || 'USD'
+              } 
+            }));
           } else {
-            setCurrentPrices(prev => ({ ...prev, [ticker]: { price: data.price, currency: data.currency, loading: false } }));
+            // Use currentPrice from response, fallback to price, then to undefined
+            const price = data.currentPrice || data.price;
+            const currency = data.currency || 'USD';
+            
+            setCurrentPrices(prev => ({ 
+              ...prev, 
+              [ticker]: { 
+                price,
+                currency,
+                loading: false,
+                error: price === undefined ? 'Price data not available' : undefined
+              } 
+            }));
           }
         } catch (err) {
           setCurrentPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: 'Network error' } }));
@@ -217,7 +267,16 @@ const PortfolioScreen = () => {
         const session = supabase.auth.session();
         const jwt = session?.access_token;
         if (!jwt) {
-          setWatchlistPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: 'Not authenticated' } }));
+          setWatchlistPrices(prev => ({ 
+            ...prev, 
+            [ticker]: { 
+              ...prev[ticker], 
+              loading: false, 
+              error: 'Not authenticated',
+              price: undefined,
+              currency: 'USD'
+            } 
+          }));
           return;
         }
         const backendUrl = 'http://10.0.2.2:3000/api/stock-details';
@@ -230,10 +289,33 @@ const PortfolioScreen = () => {
           body: JSON.stringify({ ticker }),
         });
         const data = await response.json();
+        
         if (!response.ok || data.error) {
-          setWatchlistPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: data.error || 'Failed to fetch price' } }));
+          console.error('Error fetching watchlist price for', ticker, ':', data.error || 'Unknown error');
+          setWatchlistPrices(prev => ({ 
+            ...prev, 
+            [ticker]: { 
+              ...prev[ticker], 
+              loading: false, 
+              error: data.error || 'Failed to fetch price',
+              price: undefined,
+              currency: data.currency || 'USD'
+            } 
+          }));
         } else {
-          setWatchlistPrices(prev => ({ ...prev, [ticker]: { price: data.price, currency: data.currency, loading: false } }));
+          // Use currentPrice from response, fallback to price, then to undefined
+          const price = data.currentPrice || data.price;
+          const currency = data.currency || 'USD';
+          
+          setWatchlistPrices(prev => ({ 
+            ...prev, 
+            [ticker]: { 
+              price,
+              currency,
+              loading: false,
+              error: price === undefined ? 'Price data not available' : undefined
+            } 
+          }));
         }
       } catch (err) {
         setWatchlistPrices(prev => ({ ...prev, [ticker]: { ...prev[ticker], loading: false, error: 'Network error' } }));
@@ -815,10 +897,16 @@ const PortfolioScreen = () => {
                       priceInfo.loading ? (
                         <ActivityIndicator size="small" color="#1565c0" style={{ marginBottom: 2 }} />
                       ) : priceInfo.error ? (
-                        <Text style={{ color: '#c62828', fontSize: 10, marginBottom: 2 }}>Err: {priceInfo.error}</Text>
-                      ) : (
+                        <Text style={{ color: '#c62828', fontSize: 10, marginBottom: 2 }}>
+                          {priceInfo.error}
+                        </Text>
+                      ) : priceInfo.price !== undefined ? (
                         <Text style={{ color: '#2e7d32', fontSize: 10, marginBottom: 2 }}>
-                          Current: ${priceInfo.price} {priceInfo.currency || ''}
+                          Current: {getCurrencySymbol(priceInfo.currency)} {priceInfo.price.toFixed(2)}
+                        </Text>
+                      ) : (
+                        <Text style={{ color: '#f57c00', fontSize: 10, marginBottom: 2 }}>
+                          Price not available
                         </Text>
                       )
                     ) : null}
@@ -923,10 +1011,16 @@ const PortfolioScreen = () => {
                         priceInfo.loading ? (
                           <ActivityIndicator size="small" color="#1565c0" style={{ marginBottom: 2 }} />
                         ) : priceInfo.error ? (
-                          <Text style={{ color: '#c62828', fontSize: 10, marginBottom: 2 }}>Err: {priceInfo.error}</Text>
-                        ) : (
+                          <Text style={{ color: '#c62828', fontSize: 10, marginBottom: 2 }}>
+                            {priceInfo.error}
+                          </Text>
+                        ) : priceInfo.price !== undefined ? (
                           <Text style={{ color: '#2e7d32', fontSize: 10, marginBottom: 2 }}>
-                            Current: ${priceInfo.price} {priceInfo.currency || ''}
+                            Current: {getCurrencySymbol(priceInfo.currency)} {priceInfo.price.toFixed(2)}
+                          </Text>
+                        ) : (
+                          <Text style={{ color: '#f57c00', fontSize: 10, marginBottom: 2 }}>
+                            Price not available
                           </Text>
                         )
                       ) : null}
