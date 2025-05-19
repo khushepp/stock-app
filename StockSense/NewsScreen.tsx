@@ -71,7 +71,7 @@ const NewsScreen = () => {
         setCompanyNames({ ...newCache });
       }
     } catch (error) {
-      console.error('Error preloading company names:', error);
+      // Silently handle the error in production
     }
   }, []);
 
@@ -340,7 +340,7 @@ const NewsScreen = () => {
       return companyName;
       
     } catch (apiError) {
-      console.error('API Error fetching company name:', apiError);
+      // Silently handle the error in production
       return ticker;
     }
   };
@@ -428,7 +428,6 @@ const NewsScreen = () => {
                       const jwt = session?.access_token;
                       
                       if (!jwt) {
-                        console.error('User not authenticated');
                         return;
                       }
                       
@@ -446,7 +445,7 @@ const NewsScreen = () => {
                         showStockDetails(data);
                       }
                     } catch (error) {
-                      console.error('Error fetching stock details:', error);
+                      // Silently handle the error in production
                     }
                   }}
                   activeOpacity={0.7}

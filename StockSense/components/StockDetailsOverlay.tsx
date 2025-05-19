@@ -13,7 +13,6 @@ const formatNumber = (num?: number | null, decimals: number = 2): string => {
       maximumFractionDigits: decimals
     });
   } catch (e) {
-    console.warn('Error formatting number:', num, e);
     return 'N/A';
   }
 };
@@ -29,7 +28,6 @@ const formatCurrency = (value?: number | null, currency: string = 'USD'): string
       maximumFractionDigits: 2
     }).format(value);
   } catch (e) {
-    console.warn('Error formatting currency:', value, currency, e);
     return `$${value.toFixed(2)}`; // Fallback to basic formatting
   }
 };
@@ -104,9 +102,7 @@ const StockDetailsOverlay: React.FC = () => {
         const backendUrl = 'http://10.0.2.2:3000/api/stock-details';
         const requestBody = { ticker: initialStock.symbol };
         
-        console.log('Fetching stock details for:', initialStock.symbol);
-        console.log('Sending request to:', backendUrl);
-        console.log('Request body:', requestBody);
+        // Fetching stock details
         
         // Fetch detailed stock data using POST request to match the backend endpoint
         const response = await fetch(backendUrl, {
@@ -118,25 +114,25 @@ const StockDetailsOverlay: React.FC = () => {
           body: JSON.stringify(requestBody),
         });
         
-        console.log('Response status:', response.status);
+        // Processing response
         
         if (!response.ok) {
           let errorMessage = 'Failed to fetch stock details';
           let errorData;
           try {
             errorData = await response.json();
-            console.log('Error response data:', errorData);
+            // Error response received
             errorMessage = errorData.error || errorMessage;
           } catch (e) {
             // If we can't parse the error JSON, use the status text
-            console.log('Error parsing error response:', e);
+            // Error parsing response
             errorMessage = response.statusText || errorMessage;
           }
           throw new Error(errorMessage);
         }
         
         const data = await response.json();
-        console.log('Received stock data:', data);
+        // Stock data received
         
         // Map the API response to our Stock interface
         const stockData: Stock = {
@@ -181,12 +177,10 @@ const StockDetailsOverlay: React.FC = () => {
         };
         
         // Log the available data for debugging
-        console.log('Available data from API:', Object.keys(data).join(', '));
-        
-        console.log('Processed stock data:', stockData);
+        // Stock data processed
         setStock(stockData);
       } catch (err: any) {
-        console.error('Error fetching stock details:', err);
+        // Error fetching stock details
         setError(err.message || 'Failed to load stock details');
       } finally {
         setLoading(false);
