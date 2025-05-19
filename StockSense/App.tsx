@@ -1,30 +1,48 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
 import React, { useState, useEffect } from 'react';
 import { StockProvider } from './context/StockContext';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, Button, StyleSheet, TextInput, Alert, ActivityIndicator, TouchableOpacity, Image, ScrollView } from 'react-native';
+import { View, Text, Button, StyleSheet, TextInput, Alert, TouchableOpacity, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'node-libs-react-native/globals';
 import 'react-native-url-polyfill/auto';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { setupURLPolyfill } from 'react-native-url-polyfill';
 import NewsScreen from './NewsScreen';
 import PortfolioScreen from './PortfolioScreen';
 import ProfileScreen from './ProfileScreen';
 import AgentModeScreen from './AgentModeScreen';
 
-// TODO: Replace with your Supabase project URL and anon key
-const SUPABASE_URL = 'https://egmznvekiwvesxzcmwcq.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnbXpudmVraXd2ZXN4emNtd2NxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxMTQyMjgsImV4cCI6MjA2MjY5MDIyOH0.5VALCgaciPl0_BvdZyHKixlpFFLUvkT5zSEzskz0Rug';
+// Setup URL polyfill for React Native
+setupURLPolyfill();
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Supabase configuration
+const supabaseUrl = 'https://egmznvekiwvesxzcmwcq.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnbXpudmVraXd2ZXN4emNtd2NxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxMTQyMjgsImV4cCI6MjA2MjY5MDIyOH0.5VALCgaciPl0_BvdZyHKixlpFFLUvkT5zSEzskz0Rug';
+
+// Initialize Supabase with AsyncStorage for session persistence
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  localStorage: AsyncStorage as any,
+  autoRefreshToken: true,
+  persistSession: true,
+  detectSessionInUrl: false
+});
+
+// Function to manually persist the session
+const persistSession = async () => {
+  try {
+    const session = supabase.auth.session();
+    if (session?.access_token) {
+      await AsyncStorage.setItem('supabase.auth.token', session.access_token);
+    }
+  } catch (error) {
+    console.error('Error persisting session:', error);
+  }
+};
+
+// Initial session persistence check
+persistSession();
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -139,7 +157,12 @@ function SignUpScreen({ navigation }: any) {
   );
 }
 
-export function HomeScreen({ onLogout }: any) {
+type HomeScreenProps = {
+  route: any;
+  navigation: any;
+};
+
+export function HomeScreen({ route, navigation }: HomeScreenProps) {
   const [ticker, setTicker] = useState('');
   const [stock, setStock] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -280,7 +303,6 @@ export function HomeScreen({ onLogout }: any) {
           <Text style={{ fontSize: 18 }}>Price: {stock.price} {stock.currency}</Text>
         </View>
       )}
-      <AuthButton title="Logout" onPress={onLogout} />
     </View>
   );
 }
@@ -289,12 +311,14 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home">
-        {props => <HomeScreen {...props} onLogout={onLogout} />}
+        {props => <HomeScreen {...props} />}
       </Tab.Screen>
       <Tab.Screen name="News" component={NewsScreen} />
       <Tab.Screen name="Portfolio" component={PortfolioScreen} />
       <Tab.Screen name="AgentMode" component={AgentModeScreen} options={{ title: 'Agent Mode' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile">
+        {props => <ProfileScreen {...props} onLogout={onLogout} />}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 }
@@ -305,20 +329,33 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     // Check for existing session on mount
-    const getSession = async () => {
-      const session = supabase.auth.session();
-      setSession(session ?? null);
-      setLoading(false);
+    const initializeAuth = async () => {
+      try {
+        // Get the current session
+        const currentSession = supabase.auth.session();
+        console.log('Initial session:', currentSession ? 'Found' : 'None');
+        setSession(currentSession);
+        
+        // Set up auth state change listener
+        const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
+          console.log('Auth state changed:', event);
+          setSession(newSession);
+        });
+        
+        // Cleanup function
+        return () => {
+          if (authListener && authListener.unsubscribe) {
+            authListener.unsubscribe();
+          }
+        };
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setLoading(false);
+      }
     };
-    getSession();
 
-    // Listen for auth state changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-    return () => {
-      listener?.unsubscribe();
-    };
+    initializeAuth();
   }, []);
 
   const handleLogout = async () => {
