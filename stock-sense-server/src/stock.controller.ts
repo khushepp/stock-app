@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Query } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, Param } from '@nestjs/common';
 import yahooFinance from 'yahoo-finance2';
 import axios from 'axios';
 
@@ -214,6 +214,96 @@ export class StockController {
       console.error('Error fetching stock details:', error);
       return { 
         error: 'Failed to fetch stock details',
+        details: error.message 
+      };
+    }
+  }
+
+  @Get('/historical/:symbol')
+  async getHistoricalData(
+    @Param('symbol') symbol: string,
+    @Query('interval') interval: '1d' | '1wk' | '1mo' = '1d',
+    @Query('range') range: string = '1y'
+  ) {
+    if (!symbol) {
+      return { error: 'Symbol is required' };
+    }
+
+    try {
+      // Validate interval
+      const validIntervals = ['1d', '1wk', '1mo'];
+      if (!validIntervals.includes(interval)) {
+        return { error: 'Invalid interval. Must be one of: 1d, 1wk, 1mo' };
+      }
+
+      // Calculate date range
+      let period1: string | Date = '1970-01-01'; // Default to all available data
+      
+      if (range === '1d') {
+        period1 = new Date();
+        period1.setDate(period1.getDate() - 1);
+      } else if (range === '5d') {
+        period1 = new Date();
+        period1.setDate(period1.getDate() - 5);
+      } else if (range === '1mo') {
+        period1 = new Date();
+        period1.setMonth(period1.getMonth() - 1);
+      } else if (range === '3mo') {
+        period1 = new Date();
+        period1.setMonth(period1.getMonth() - 3);
+      } else if (range === '6mo') {
+        period1 = new Date();
+        period1.setMonth(period1.getMonth() - 6);
+      } else if (range === '1y') {
+        period1 = new Date();
+        period1.setFullYear(period1.getFullYear() - 1);
+      } else if (range === '5y') {
+        period1 = new Date();
+        period1.setFullYear(period1.getFullYear() - 5);
+      }
+
+      console.log(`Fetching historical data for ${symbol} with interval ${interval} and period1 ${period1}`);
+      
+      // Fetch historical data
+      const result = await yahooFinance.historical(symbol, {
+        period1,
+        interval,
+        includeAdjustedClose: true,
+      });
+
+      console.log(`Received ${result?.length || 0} data points for ${symbol}`);
+      
+      if (!result || result.length === 0) {
+        console.error('No historical data found for', symbol);
+        return { error: 'No historical data found' };
+      }
+
+      // Log first and last items to verify data
+      console.log('First data point:', JSON.stringify(result[0]));
+      console.log('Last data point:', JSON.stringify(result[result.length - 1]));
+
+      // Transform to TradingView format
+      const historicalData = result.map(item => {
+        if (!item.date) {
+          console.error('Item missing date field:', item);
+          return null;
+        }
+        return {
+          time: item.date.toISOString().split('T')[0], // Format as YYYY-MM-DD
+          open: item.open || 0,
+          high: item.high || 0,
+          low: item.low || 0,
+          close: item.close || 0,
+          volume: item.volume || 0,
+        };
+      }).filter(Boolean); // Remove any null entries
+
+      console.log(`Transformed ${historicalData.length} data points`);
+      return { data: historicalData };
+    } catch (error) {
+      console.error('Error fetching historical data:', error);
+      return { 
+        error: 'Failed to fetch historical data',
         details: error.message 
       };
     }

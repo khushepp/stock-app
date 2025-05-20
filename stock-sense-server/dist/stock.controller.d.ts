@@ -60,6 +60,26 @@ export declare class StockController {
         error: string;
         details: any;
     }>;
+    getHistoricalData(symbol: string, interval?: '1d' | '1wk' | '1mo', range?: string): Promise<{
+        error: string;
+        data?: undefined;
+        details?: undefined;
+    } | {
+        data: ({
+            time: string;
+            open: number;
+            high: number;
+            low: number;
+            close: number;
+            volume: number;
+        } | null)[];
+        error?: undefined;
+        details?: undefined;
+    } | {
+        error: string;
+        details: any;
+        data?: undefined;
+    }>;
     getStockSuggestions(query: string): Promise<{
         suggestions: {
             symbol: any;

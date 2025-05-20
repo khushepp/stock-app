@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useStockContext } from '../context/StockContext';
 import { Stock } from '../types/stock';
-import { Modal, TouchableOpacity, View, Text, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { Modal, TouchableOpacity, View, Text, ScrollView, StyleSheet, ActivityIndicator, Linking, Image, FlatList } from 'react-native';
 import { supabase } from '../App';
+import TradingViewChart, { CandleData } from './TradingViewChart';
+
+type TimeRange = '1d' | '5d' | '1mo' | '3mo' | '6mo' | '1y' | '5y';
 
 // Helper function to format numbers with commas and optional decimal places
 const formatNumber = (num?: number | null, decimals: number = 2): string => {
@@ -80,115 +83,166 @@ const SectionHeader: React.FC<{ title: string }> = ({ title }) => (
 const StockDetailsOverlay: React.FC = () => {
   const { selectedStock: initialStock, isOpen, hideStockDetails } = useStockContext();
   const [stock, setStock] = useState<Stock | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chartData, setChartData] = useState<CandleData[]>([]);
+  const [isLoadingChart, setIsLoadingChart] = useState(true);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>('1y');
+  const [news, setNews] = useState<any[]>([]);
+  const [isLoadingNews, setIsLoadingNews] = useState(false);
+  const [newsError, setNewsError] = useState<string | null>(null);
+
+  const fetchNews = useCallback(async (symbol: string) => {
+    try {
+      setIsLoadingNews(true);
+      setNewsError(null);
+      
+      console.log('Fetching news for symbol:', symbol);
+      const url = `http://10.0.2.2:3000/api/stock-details/portfolio-news?symbols=${encodeURIComponent(symbol)}`;
+      console.log('News API URL:', url);
+      
+      const response = await fetch(url);
+      console.log('News API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('News API error response:', errorText);
+        throw new Error(`Failed to fetch news: ${response.status} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('News API response data:', JSON.stringify(data, null, 2));
+      
+      if (data.error) {
+        console.error('News API returned error:', data.error);
+        throw new Error(data.error);
+      }
+      
+      // Take the latest 5 news items
+      const newsItems = Array.isArray(data.news) ? data.news : 
+                      Array.isArray(data) ? data : [];
+      console.log('Processed news items:', newsItems.length);
+      
+      const latestNews = newsItems.slice(0, 5);
+      setNews(latestNews);
+      
+      if (latestNews.length === 0) {
+        console.log('No news items found for symbol:', symbol);
+      }
+    } catch (err: any) {
+      console.error('Error fetching news:', err);
+      setNewsError('Failed to load news. ' + (err.message || ''));
+    } finally {
+      setIsLoadingNews(false);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchStockDetails = async () => {
       if (!initialStock || !isOpen) return;
       
-      setLoading(true);
+      setIsLoading(true);
       setError(null);
-      
+
       try {
-        const session = await supabase.auth.session();
-        const jwt = session?.access_token;
+        const baseUrl = 'http://10.0.2.2:3000';
+        const url = `${baseUrl}/api/stock-details`;
         
-        if (!jwt) {
-          throw new Error('User not authenticated');
-        }
+        console.log('Fetching stock details from:', url);
         
-        // Use the same endpoint as in App.tsx for consistency
-        const backendUrl = 'http://10.0.2.2:3000/api/stock-details';
-        const requestBody = { ticker: initialStock.symbol };
-        
-        // Fetching stock details
-        
-        // Fetch detailed stock data using POST request to match the backend endpoint
-        const response = await fetch(backendUrl, {
+        const response = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}`,
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({ ticker: initialStock.symbol })
         });
-        
-        // Processing response
-        
+
+        const responseData = await response.json();
+        console.log('Stock details response:', responseData);
+
         if (!response.ok) {
-          let errorMessage = 'Failed to fetch stock details';
-          let errorData;
-          try {
-            errorData = await response.json();
-            // Error response received
-            errorMessage = errorData.error || errorMessage;
-          } catch (e) {
-            // If we can't parse the error JSON, use the status text
-            // Error parsing response
-            errorMessage = response.statusText || errorMessage;
-          }
-          throw new Error(errorMessage);
+          throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
         }
-        
-        const data = await response.json();
-        // Stock data received
-        
-        // Map the API response to our Stock interface
-        const stockData: Stock = {
-          // Required fields with fallbacks
-          id: data.id || initialStock.id,
-          symbol: data.symbol || initialStock.symbol,
-          name: data.name || initialStock.name,
-          currentPrice: data.currentPrice || data.price || initialStock.currentPrice,
-          change: data.change || initialStock.change,
-          changePercent: data.changePercent || initialStock.changePercent,
-          
-          // Map all available fields from the API response
-          currency: data.currency || 'USD',
-          regularMarketPrice: data.currentPrice || data.price,
-          regularMarketVolume: data.regularMarketVolume || data.volume,
-          regularMarketOpen: data.regularMarketOpen || data.open,
-          regularMarketDayHigh: data.regularMarketDayHigh || data.dayHigh,
-          regularMarketDayLow: data.regularMarketDayLow || data.dayLow,
-          regularMarketPreviousClose: data.regularMarketPreviousClose || data.previousClose,
-          averageDailyVolume3Month: data.averageDailyVolume3Month || data.averageVolume,
-          trailingPE: data.trailingPE || data.peRatio,
-          forwardPE: data.forwardPE,
-          priceToBook: data.priceToBook,
-          dividendYield: data.dividendYield,
-          dividendRate: data.dividendRate,
-          payoutRatio: data.payoutRatio,
-          trailingAnnualDividendYield: data.trailingAnnualDividendYield,
-          trailingAnnualDividendRate: data.trailingAnnualDividendRate,
-          fiftyTwoWeekHigh: data.fiftyTwoWeekHigh || data.yearHigh,
-          fiftyTwoWeekLow: data.fiftyTwoWeekLow || data.yearLow,
-          marketCap: data.marketCap,
-          epsTrailingTwelveMonths: data.epsTrailingTwelveMonths,
-          epsForward: data.epsForward,
-          beta: data.beta,
-          exchange: data.exchange,
-          exchangeName: data.exchangeName,
-          marketState: data.marketState,
-          quoteType: data.quoteType,
-          fiftyDayAverage: data.fiftyDayAverage,
-          twoHundredDayAverage: data.twoHundredDayAverage,
-          lastUpdated: data.lastUpdated
-        };
-        
-        // Log the available data for debugging
-        // Stock data processed
-        setStock(stockData);
+
+        if (responseData.error) {
+          throw new Error(responseData.error);
+        }
+
+        setStock(responseData);
       } catch (err: any) {
-        // Error fetching stock details
-        setError(err.message || 'Failed to load stock details');
+        console.error('Error fetching stock details:', err);
+        setError(err?.message || 'Failed to load stock details');
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
+
+      fetchChartData(initialStock.symbol, timeRange);
+      fetchNews(initialStock.symbol);
     };
-    
+
     fetchStockDetails();
-  }, [initialStock, isOpen]);
+  }, [initialStock, isOpen, timeRange, fetchNews]);
+
+  const fetchChartData = async (symbol: string, range: TimeRange) => {
+    if (!symbol) return;
+
+    setIsLoadingChart(true);
+    setChartError(null);
+
+    try {
+      let interval: '1d' | '1wk' | '1mo' = '1d';
+      if (range === '1y' || range === '5y') {
+        interval = '1wk';
+      } else if (range === '1mo' || range === '3mo' || range === '6mo') {
+        interval = '1d';
+      }
+
+      console.log(`Fetching chart data for ${symbol}, interval: ${interval}, range: ${range}`);
+      
+      // Update this URL to match your NestJS server's URL
+      // For development with Android emulator, use 10.0.2.2 to access localhost
+      const baseUrl = 'http://10.0.2.2:3000'; // Default NestJS port is 3000
+      const url = `${baseUrl}/api/stock-details/historical/${symbol}?interval=${interval}&range=${range}`;
+      
+      console.log('Fetching from URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const responseData = await response.json();
+      console.log('Raw response from server:', JSON.stringify(responseData, null, 2));
+
+      if (!response.ok) {
+        throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      // The data should be in the data property of the response
+      if (!responseData.data || !Array.isArray(responseData.data)) {
+        console.error('Invalid data format:', responseData);
+        throw new Error('Invalid data format received');
+      }
+
+      // Log first and last items for verification
+      console.log(`Received ${responseData.data.length} data points`);
+      if (responseData.data.length > 0) {
+        console.log('First data point:', JSON.stringify(responseData.data[0]));
+        console.log('Last data point:', JSON.stringify(responseData.data[responseData.data.length - 1]));
+      }
+
+      setChartData(responseData.data);
+    } catch (err: any) {
+      console.error('Error fetching chart data:', err);
+      setChartError(err?.message || 'Failed to load chart data');
+    } finally {
+      setIsLoadingChart(false);
+    }
+  };
 
   if (!initialStock || !isOpen) return null;
 
@@ -205,10 +259,8 @@ const StockDetailsOverlay: React.FC = () => {
       <TouchableOpacity 
         style={styles.retryButton}
         onPress={() => {
-          // Reset the state to trigger a refetch
           setError(null);
-          setLoading(true);
-          // The useEffect will automatically refetch when loading is set to true
+          setIsLoading(true);
         }}
       >
         <Text style={styles.retryButtonText}>Retry</Text>
@@ -217,7 +269,7 @@ const StockDetailsOverlay: React.FC = () => {
   );
 
   const renderContent = () => {
-    if (loading) return renderLoading();
+    if (isLoading) return renderLoading();
     if (error) return renderError();
     if (!stock) return null;
 
@@ -242,6 +294,37 @@ const StockDetailsOverlay: React.FC = () => {
             {stock.exchangeName || stock.exchange} • {stock.currency}
             {stock.marketState && ` • ${stock.marketState}`}
           </Text>
+        </View>
+
+        {/* Time Range Selector */}
+        <View style={styles.timeRangeContainer}>
+          {(['1d', '5d', '1mo', '3mo', '6mo', '1y', '5y'] as TimeRange[]).map((range) => (
+            <TouchableOpacity
+              key={range}
+              style={[
+                styles.timeRangeButton,
+                timeRange === range && styles.timeRangeButtonActive
+              ]}
+              onPress={() => setTimeRange(range)}
+            >
+              <Text style={[
+                styles.timeRangeText,
+                timeRange === range && styles.timeRangeTextActive
+              ]}>
+                {range.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Chart Section */}
+        <View style={styles.chartContainer}>
+          <TradingViewChart 
+            symbol={stock.symbol}
+            data={chartData}
+            isLoading={isLoadingChart}
+            error={chartError}
+          />
         </View>
 
         {/* Key Stats */}
@@ -341,6 +424,49 @@ const StockDetailsOverlay: React.FC = () => {
             </View>
           </>
         )}
+
+        {/* Latest News */}
+        <SectionHeader title="Latest News" />
+        <View style={styles.sectionContainer}>
+          {isLoadingNews ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#2e7d32" />
+              <Text style={styles.loadingText}>Loading news...</Text>
+            </View>
+          ) : newsError ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{newsError}</Text>
+            </View>
+          ) : news.length === 0 ? (
+            <Text style={styles.noNewsText}>No news available</Text>
+          ) : (
+            <FlatList
+              data={news}
+              keyExtractor={(item, index) => item.id ? item.id.toString() : `news-${index}`}
+              scrollEnabled={false}
+              renderItem={({ item }) => {
+                const newsDate = item.datetime ? new Date(item.datetime * 1000) : null;
+                return (
+                  <TouchableOpacity 
+                    style={styles.newsItem}
+                    onPress={() => item.url ? Linking.openURL(item.url) : null}
+                  >
+                    <View style={styles.newsContent}>
+                      <Text style={styles.newsTitle} numberOfLines={2}>
+                        {item.headline || 'No title'}
+                      </Text>
+                      <Text style={styles.newsSource} numberOfLines={1}>
+                        {item.source || 'Unknown source'}
+                        {newsDate && ` • ${newsDate.toLocaleDateString()}`}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+              ItemSeparatorComponent={() => <View style={styles.newsDivider} />}
+            />
+          )}
+        </View>
       </ScrollView>
     );
   };
@@ -383,7 +509,41 @@ const StockDetailsOverlay: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  // Time Range Selector
+  timeRangeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#f5f5f5',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  timeRangeButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  timeRangeButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  timeRangeText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  timeRangeTextActive: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  
   // Layout
+  chartContainer: {
+    height: 300,
+    width: '100%',
+    marginVertical: 10,
+    backgroundColor: '#fff',
+    position: 'relative',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: '#fff',
@@ -537,6 +697,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: '#333',
+  },
+  
+  // News Styles
+  newsItem: {
+    paddingVertical: 12,
+  },
+  newsContent: {
+    flex: 1,
+  },
+  newsTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#000',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  newsSource: {
+    fontSize: 12,
+    color: '#888',
+  },
+  newsDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginTop: 8,
+  },
+  noNewsText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    paddingVertical: 16,
   },
   
   // Links

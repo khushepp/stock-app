@@ -171,6 +171,82 @@ let StockController = class StockController {
             };
         }
     }
+    async getHistoricalData(symbol, interval = '1d', range = '1y') {
+        if (!symbol) {
+            return { error: 'Symbol is required' };
+        }
+        try {
+            const validIntervals = ['1d', '1wk', '1mo'];
+            if (!validIntervals.includes(interval)) {
+                return { error: 'Invalid interval. Must be one of: 1d, 1wk, 1mo' };
+            }
+            let period1 = '1970-01-01';
+            if (range === '1d') {
+                period1 = new Date();
+                period1.setDate(period1.getDate() - 1);
+            }
+            else if (range === '5d') {
+                period1 = new Date();
+                period1.setDate(period1.getDate() - 5);
+            }
+            else if (range === '1mo') {
+                period1 = new Date();
+                period1.setMonth(period1.getMonth() - 1);
+            }
+            else if (range === '3mo') {
+                period1 = new Date();
+                period1.setMonth(period1.getMonth() - 3);
+            }
+            else if (range === '6mo') {
+                period1 = new Date();
+                period1.setMonth(period1.getMonth() - 6);
+            }
+            else if (range === '1y') {
+                period1 = new Date();
+                period1.setFullYear(period1.getFullYear() - 1);
+            }
+            else if (range === '5y') {
+                period1 = new Date();
+                period1.setFullYear(period1.getFullYear() - 5);
+            }
+            console.log(`Fetching historical data for ${symbol} with interval ${interval} and period1 ${period1}`);
+            const result = await yahoo_finance2_1.default.historical(symbol, {
+                period1,
+                interval,
+                includeAdjustedClose: true,
+            });
+            console.log(`Received ${result?.length || 0} data points for ${symbol}`);
+            if (!result || result.length === 0) {
+                console.error('No historical data found for', symbol);
+                return { error: 'No historical data found' };
+            }
+            console.log('First data point:', JSON.stringify(result[0]));
+            console.log('Last data point:', JSON.stringify(result[result.length - 1]));
+            const historicalData = result.map(item => {
+                if (!item.date) {
+                    console.error('Item missing date field:', item);
+                    return null;
+                }
+                return {
+                    time: item.date.toISOString().split('T')[0],
+                    open: item.open || 0,
+                    high: item.high || 0,
+                    low: item.low || 0,
+                    close: item.close || 0,
+                    volume: item.volume || 0,
+                };
+            }).filter(Boolean);
+            console.log(`Transformed ${historicalData.length} data points`);
+            return { data: historicalData };
+        }
+        catch (error) {
+            console.error('Error fetching historical data:', error);
+            return {
+                error: 'Failed to fetch historical data',
+                details: error.message
+            };
+        }
+    }
     async getStockSuggestions(query) {
         if (!query || query.length < 2) {
             return { suggestions: [] };
@@ -210,6 +286,15 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], StockController.prototype, "getStockDetails", null);
+__decorate([
+    (0, common_1.Get)('/historical/:symbol'),
+    __param(0, (0, common_1.Param)('symbol')),
+    __param(1, (0, common_1.Query)('interval')),
+    __param(2, (0, common_1.Query)('range')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:returntype", Promise)
+], StockController.prototype, "getHistoricalData", null);
 __decorate([
     (0, common_1.Post)('/suggestions'),
     __param(0, (0, common_1.Body)('query')),
