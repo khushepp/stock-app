@@ -1,1 +1,3 @@
-stock-sense-server/finbert-service/venv/
+# Ignore Python virtual environments
+venv/
+**/venv/
