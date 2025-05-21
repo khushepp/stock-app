@@ -1,10 +1,13 @@
+import { SentimentService } from './sentiment/sentiment.service';
 export declare class StockController {
+    private readonly sentimentService;
     private newsService;
+    constructor(sentimentService: SentimentService);
     getNews(category?: string): Promise<{
         error: any;
         news?: undefined;
     } | {
-        news: any;
+        news: any[];
         error?: undefined;
     }>;
     getPortfolioNews(symbols: string): Promise<{

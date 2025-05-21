@@ -402,62 +402,77 @@ const NewsScreen = () => {
         onPress={() => item.url && Linking.openURL(item.url)} 
         style={styles.newsItem}
       >
-        {imageUrl && (
-          <Image 
-            source={{ uri: imageUrl }} 
-            style={styles.newsImage} 
-            resizeMode="cover"
-            onError={(e) => {}}
-          />
-        )}
+        <View style={styles.imageContainer}>
+          {imageUrl && (
+            <Image 
+              source={{ uri: imageUrl }} 
+              style={styles.newsImage} 
+              resizeMode="cover"
+              onError={(e) => {}}
+            />
+          )}
+        </View>
         
-        {/* Related companies/tickers */}
-        {relatedCompanies.length > 0 && (
-          <View style={styles.companyContainer}>
-            {relatedCompanies.map((ticker: string, idx: number) => {
-              const displayName = companyNames[ticker] || ticker;
-              // Create a unique key using multiple identifiers
-              const uniqueKey = `company-${ticker}-${idx}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-              return (
-                <TouchableOpacity 
-                  key={uniqueKey} 
-                  style={styles.companyBadge}
-                  onPress={async () => {
-                    try {
-                      const session = await supabase.auth.session();
-                      const jwt = session?.access_token;
-                      
-                      if (!jwt) {
-                        return;
+        {/* Company and Sentiment Row */}
+        <View style={styles.companyRow}>
+          {/* Related companies/tickers */}
+          {relatedCompanies.length > 0 && (
+            <View style={styles.companyContainer}>
+              {relatedCompanies.map((ticker: string, idx: number) => {
+                const displayName = companyNames[ticker] || ticker;
+                // Create a unique key using multiple identifiers
+                const uniqueKey = `company-${ticker}-${idx}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                return (
+                  <TouchableOpacity 
+                    key={uniqueKey} 
+                    style={styles.companyBadge}
+                    onPress={async () => {
+                      try {
+                        const session = await supabase.auth.session();
+                        const jwt = session?.access_token;
+                        
+                        if (!jwt) {
+                          return;
+                        }
+                        
+                        const response = await fetch(`http://10.0.2.2:3000/api/stock-details`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${jwt}`,
+                          },
+                          body: JSON.stringify({ ticker }),
+                        });
+                        
+                        if (response.ok) {
+                          const data = await response.json();
+                          showStockDetails(data);
+                        }
+                      } catch (error) {
+                        // Silently handle the error in production
                       }
-                      
-                      const response = await fetch(`http://10.0.2.2:3000/api/stock-details`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${jwt}`,
-                        },
-                        body: JSON.stringify({ ticker }),
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        showStockDetails(data);
-                      }
-                    } catch (error) {
-                      // Silently handle the error in production
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.companyText}>
-                    {displayName}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.companyText}>
+                      {displayName}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+          
+          {/* Sentiment Indicator */}
+          {item.sentiment && (
+            <Text style={[
+              styles.sentimentText,
+              { color: getSentimentStyle(item.sentiment.sentiment).color }
+            ]}>
+              {formatSentiment(item.sentiment)}
+            </Text>
+          )}
+        </View>
         
         <Text style={styles.newsTitle} numberOfLines={2} ellipsizeMode="tail">
           {title}
@@ -477,11 +492,11 @@ const NewsScreen = () => {
           <Text style={styles.newsSource} numberOfLines={1}>
             {source}
           </Text>
-          {date ? (
+          {date && (
             <Text style={styles.newsDate}>
               {date}
             </Text>
-          ) : null}
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -495,6 +510,26 @@ const NewsScreen = () => {
       </View>
     );
   }
+
+  // Helper function to get sentiment styling
+  const getSentimentStyle = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive':
+        return { color: '#4caf50' }; // Green for positive
+      case 'negative':
+        return { color: '#f44336' }; // Red for negative
+      default:
+        return { color: '#757575' }; // Grey for neutral
+    }
+  };
+
+  // Format sentiment text with percentage
+  const formatSentiment = (sentiment: any) => {
+    if (!sentiment) return null;
+    
+    const score = Math.abs(sentiment.sentiment_score * 100).toFixed(0);
+    return `${sentiment.sentiment}-${score}%`;
+  };
 
   if (error) {
     return (
@@ -656,6 +691,32 @@ const NewsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  // ... existing styles ...
+  imageContainer: {
+    marginBottom: 8,
+  },
+  companyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  companyContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    flex: 1,
+    marginRight: 8,
+    marginBottom: 10,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    width: '100%',
+  },
+  sentimentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+    marginLeft: 'auto', // Pushes the sentiment to the right
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -771,14 +832,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  companyContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 10,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    width: '100%',
-  },
+
   companyBadge: {
     backgroundColor: '#f5f5f5',
     borderRadius: 8,

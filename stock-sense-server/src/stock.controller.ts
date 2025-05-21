@@ -1,11 +1,14 @@
-import { Controller, Post, Body, Get, Query, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, Param, Inject } from '@nestjs/common';
 import yahooFinance from 'yahoo-finance2';
 import axios from 'axios';
+import { SentimentService, SentimentResult } from './sentiment/sentiment.service';
 
 class FinnhubNewsService {
   private apiKey = process.env.FINNHUB_API_KEY;
   private baseUrl = 'https://finnhub.io/api/v1/news';
   private companyNewsUrl = 'https://finnhub.io/api/v1/company-news';
+
+  constructor(private readonly sentimentService: SentimentService) {}
 
   async fetchLatestNews(category: string = 'general') {
     if (!this.apiKey) {
@@ -14,10 +17,33 @@ class FinnhubNewsService {
     try {
       const url = `${this.baseUrl}?category=${category}&token=${this.apiKey}`;
       const response = await axios.get(url);
-      return response.data;
+      
+      // Add sentiment analysis to each news item
+      const newsWithSentiment = await Promise.all(
+        response.data.map(async (newsItem: any) => ({
+          ...newsItem,
+          sentiment: await this.analyzeNewsSentiment(newsItem)
+        }))
+      );
+      
+      return newsWithSentiment;
     } catch (error: any) {
       // Handle rate limit or API errors
       return { error: error?.response?.data?.error || 'Failed to fetch news' };
+    }
+  }
+
+  private async analyzeNewsSentiment(newsItem: any): Promise<SentimentResult> {
+    try {
+      // Use headline and summary for sentiment analysis
+      const textToAnalyze = [newsItem.headline, newsItem.summary].filter(Boolean).join('. ');
+      return await this.sentimentService.analyzeSentiment(textToAnalyze);
+    } catch (error) {
+      console.error('Error in sentiment analysis:', error);
+      return {
+        sentiment_score: 0,
+        sentiment: 'neutral' as const,
+      };
     }
   }
 
@@ -36,10 +62,20 @@ class FinnhubNewsService {
       });
       
       const responses = await Promise.all(newsPromises);
-      const allNews = responses.flatMap(response => response.data);
+      let allNews = responses.flatMap(response => response.data);
+      
+      // Add sentiment analysis to each news item
+      allNews = await Promise.all(
+        allNews.map(async (newsItem: any) => ({
+          ...newsItem,
+          sentiment: await this.analyzeNewsSentiment(newsItem)
+        }))
+      );
+      
       // Sort news by datetime in descending order
       return allNews.sort((a, b) => b.datetime - a.datetime);
     } catch (error: any) {
+      console.error('Error in fetchPortfolioNews:', error);
       return { error: error?.response?.data?.error || 'Failed to fetch portfolio news' };
     }
   }
@@ -47,7 +83,11 @@ class FinnhubNewsService {
 
 @Controller('api/stock-details')
 export class StockController {
-  private newsService = new FinnhubNewsService();
+  private newsService: FinnhubNewsService;
+
+  constructor(@Inject('SENTIMENT_SERVICE') private readonly sentimentService: SentimentService) {
+    this.newsService = new FinnhubNewsService(sentimentService);
+  }
 
   @Get('/news')
   async getNews(@Query('category') category: string = 'business') {

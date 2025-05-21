@@ -41,6 +41,23 @@ const formatPercent = (value?: number, decimals: number = 2): string => {
   return `${value > 0 ? '+' : ''}${value.toFixed(decimals)}%`;
 };
 
+// Helper function to format sentiment text
+const formatSentiment = (sentiment: { sentiment: string; score?: number }) => {
+  if (!sentiment) return '';
+  const score = sentiment.score !== undefined ? Math.round(sentiment.score * 100) : 0;
+  return `${sentiment.sentiment.toLowerCase()}-${score}%`;
+};
+
+// Helper function to get sentiment color
+const getSentimentColor = (sentiment: string) => {
+  switch (sentiment.toLowerCase()) {
+    case 'positive': return '#4caf50';
+    case 'negative': return '#f44336';
+    case 'neutral': return '#757575';
+    default: return '#757575';
+  }
+};
+
 // Helper function to format large numbers (thousands, millions, billions)
 const formatBigNumber = (num?: number, decimals: number = 2): string => {
   if (num === undefined || num === null) return 'N/A';
@@ -455,10 +472,20 @@ const StockDetailsOverlay: React.FC = () => {
                       <Text style={styles.newsTitle} numberOfLines={2}>
                         {item.headline || 'No title'}
                       </Text>
-                      <Text style={styles.newsSource} numberOfLines={1}>
-                        {item.source || 'Unknown source'}
-                        {newsDate && ` • ${newsDate.toLocaleDateString()}`}
-                      </Text>
+                      <View style={styles.newsMeta}>
+                        <Text style={styles.newsSource} numberOfLines={1}>
+                          {item.source || 'Unknown source'}
+                          {newsDate && ` • ${newsDate.toLocaleDateString()}`}
+                        </Text>
+                        {item.sentiment && (
+                          <Text style={[
+                            styles.sentimentText,
+                            { color: getSentimentColor(item.sentiment.sentiment) }
+                          ]}>
+                            {formatSentiment(item.sentiment)}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -716,6 +743,19 @@ const styles = StyleSheet.create({
   newsSource: {
     fontSize: 12,
     color: '#888',
+    flex: 1,
+  },
+  newsMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  sentimentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+    marginLeft: 8,
   },
   newsDivider: {
     height: 1,

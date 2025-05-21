@@ -11,14 +11,23 @@ const common_1 = require("@nestjs/common");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const stock_controller_1 = require("./stock.controller");
+const sentiment_module_1 = require("./sentiment/sentiment.module");
+const sentiment_service_1 = require("./sentiment/sentiment.service");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [],
+        imports: [sentiment_module_1.SentimentModule],
         controllers: [app_controller_1.AppController, stock_controller_1.StockController],
-        providers: [app_service_1.AppService],
+        providers: [
+            app_service_1.AppService,
+            {
+                provide: 'SENTIMENT_SERVICE',
+                useClass: sentiment_service_1.SentimentService,
+            },
+        ],
+        exports: ['SENTIMENT_SERVICE'],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map
