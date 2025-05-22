@@ -109,11 +109,15 @@ const StockDetailsOverlay: React.FC = () => {
   const [isLoadingChart, setIsLoadingChart] = useState(true);
   const [chartError, setChartError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('1y');
-  const [news, setNews] = useState<any[]>([]);
+  const [allNews, setAllNews] = useState<any[]>([]);
+  const [visibleNewsCount, setVisibleNewsCount] = useState(5);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [newsError, setNewsError] = useState<string | null>(null);
   const [loadingSentiment, setLoadingSentiment] = useState<Record<string, boolean>>({});
   const [sentimentErrors, setSentimentErrors] = useState<Record<string, string>>({});
+  
+  // Derived state for currently visible news
+  const visibleNews = allNews.slice(0, visibleNewsCount);
 
   const analyzeNewsSentiment = useCallback(async (newsItem: any, index: number) => {
     const newsId = newsItem.id || `news-${index}`;
@@ -144,8 +148,8 @@ const StockDetailsOverlay: React.FC = () => {
       
       const result = await response.json();
       
-      // Update the news item with sentiment
-      setNews(prevNews => 
+      // Update the news item with sentiment in allNews
+      setAllNews(prevNews => 
         prevNews.map(item => 
           (item.id === newsItem.id || item === newsItem) ? { ...item, sentiment: result } : item
         )
@@ -164,10 +168,10 @@ const StockDetailsOverlay: React.FC = () => {
     }
   }, [initialStock]);
 
-  // Automatically analyze sentiment for all news articles when they are loaded
+  // Automatically analyze sentiment for visible news articles when they change
   useEffect(() => {
-    if (news.length > 0) {
-      news.forEach((item, index) => {
+    if (visibleNews.length > 0) {
+      visibleNews.forEach((item, index) => {
         const newsId = item.id || `news-${index}`;
         // Only analyze if no sentiment exists and not currently loading
         if (!item.sentiment && !loadingSentiment[newsId]) {
@@ -175,7 +179,7 @@ const StockDetailsOverlay: React.FC = () => {
         }
       });
     }
-  }, [news, loadingSentiment, analyzeNewsSentiment]);
+  }, [visibleNews, loadingSentiment, analyzeNewsSentiment]);
 
   const fetchNews = useCallback(async (symbol: string) => {
     try {
@@ -199,14 +203,13 @@ const StockDetailsOverlay: React.FC = () => {
         throw new Error(data.error);
       }
       
-      // Take the latest 5 news items
+      // Get all news items
       const newsItems = Array.isArray(data.news) ? data.news : 
                       Array.isArray(data) ? data : [];
       
-      const latestNews = newsItems.slice(0, 5);
-      setNews(latestNews);
+      setAllNews(newsItems);
       
-      if (latestNews.length === 0) {
+      if (newsItems.length === 0) {
         console.log('No news items found for symbol:', symbol);
       }
     } catch (err: any) {
@@ -216,6 +219,28 @@ const StockDetailsOverlay: React.FC = () => {
       setIsLoadingNews(false);
     }
   }, []);
+  
+  // Handle loading more news
+  const loadMoreNews = () => {
+    const newCount = visibleNewsCount + 5;
+    setVisibleNewsCount(newCount);
+    
+    // Analyze sentiment for the newly visible items
+    const newlyVisibleNews = allNews.slice(visibleNewsCount, newCount);
+    newlyVisibleNews.forEach((item, index) => {
+      const newsId = item.id || `news-${visibleNewsCount + index}`;
+      if (!item.sentiment && !loadingSentiment[newsId]) {
+        analyzeNewsSentiment(item, visibleNewsCount + index);
+      }
+    });
+  };
+
+  // Reset visible news count when overlay is opened
+  useEffect(() => {
+    if (isOpen && initialStock) {
+      setVisibleNewsCount(5);
+    }
+  }, [isOpen, initialStock]);
 
   useEffect(() => {
     const fetchStockDetails = async () => {
@@ -499,7 +524,7 @@ const StockDetailsOverlay: React.FC = () => {
         {/* Latest News */}
         <SectionHeader title="Latest News" />
         <View style={styles.sectionContainer}>
-          {isLoadingNews ? (
+          {isLoadingNews && allNews.length === 0 ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#2e7d32" />
               <Text style={styles.loadingText}>Loading news...</Text>
@@ -508,11 +533,11 @@ const StockDetailsOverlay: React.FC = () => {
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{newsError}</Text>
             </View>
-          ) : news.length === 0 ? (
+          ) : allNews.length === 0 ? (
             <Text style={styles.noNewsText}>No news available</Text>
           ) : (
             <FlatList
-              data={news}
+              data={visibleNews}
               keyExtractor={(item, index) => item.id ? item.id.toString() : `news-${index}`}
               scrollEnabled={false}
               renderItem={({ item, index }) => {
@@ -561,6 +586,19 @@ const StockDetailsOverlay: React.FC = () => {
                 );
               }}
               ItemSeparatorComponent={() => <View style={styles.newsDivider} />}
+              ListFooterComponent={
+                allNews.length > visibleNewsCount && allNews.length > 0 ? (
+                  <TouchableOpacity 
+                    style={styles.loadMoreButton}
+                    onPress={loadMoreNews}
+                    disabled={isLoadingNews}
+                  >
+                    <Text style={styles.loadMoreButtonText}>
+                      {isLoadingNews ? 'Loading...' : 'Load More'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null
+              }
             />
           )}
         </View>
@@ -831,9 +869,21 @@ const styles = StyleSheet.create({
   
   // News Styles
   newsItem: {
-    paddingVertical: 12,
+    padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#eee',
+  },
+  loadMoreButton: {
+    padding: 12,
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    margin: 10,
+  },
+  loadMoreButtonText: {
+    color: '#2e7d32',
+    fontWeight: '600',
+    fontSize: 16,
   },
   newsContent: {
     flex: 1,
