@@ -117,6 +117,12 @@ const StockDetailsOverlay: React.FC = () => {
 
   const analyzeNewsSentiment = useCallback(async (newsItem: any, index: number) => {
     const newsId = newsItem.id || `news-${index}`;
+    
+    // Skip if already has sentiment or currently analyzing
+    if (newsItem.sentiment || loadingSentiment[newsId]) {
+      return null;
+    }
+    
     try {
       setLoadingSentiment(prev => ({ ...prev, [newsId]: true }));
       setSentimentErrors(prev => ({ ...prev, [newsId]: '' }));
@@ -157,6 +163,19 @@ const StockDetailsOverlay: React.FC = () => {
       setLoadingSentiment(prev => ({ ...prev, [newsId]: false }));
     }
   }, [initialStock]);
+
+  // Automatically analyze sentiment for all news articles when they are loaded
+  useEffect(() => {
+    if (news.length > 0) {
+      news.forEach((item, index) => {
+        const newsId = item.id || `news-${index}`;
+        // Only analyze if no sentiment exists and not currently loading
+        if (!item.sentiment && !loadingSentiment[newsId]) {
+          analyzeNewsSentiment(item, index);
+        }
+      });
+    }
+  }, [news, loadingSentiment, analyzeNewsSentiment]);
 
   const fetchNews = useCallback(async (symbol: string) => {
     try {
