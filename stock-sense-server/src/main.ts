@@ -14,8 +14,6 @@ async function bootstrap() {
   
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  console.log(`Server is running on http://localhost:${port}`);
-  console.log(`API available at http://localhost:${port}/api`);
 }
 
 bootstrap().catch(err => {

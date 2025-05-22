@@ -302,8 +302,6 @@ export class StockController {
         period1.setFullYear(period1.getFullYear() - 5);
       }
 
-      console.log(`Fetching historical data for ${symbol} with interval ${interval} and period1 ${period1}`);
-      
       // Fetch historical data
       const result = await yahooFinance.historical(symbol, {
         period1,
@@ -311,16 +309,10 @@ export class StockController {
         includeAdjustedClose: true,
       });
 
-      console.log(`Received ${result?.length || 0} data points for ${symbol}`);
-      
       if (!result || result.length === 0) {
         console.error('No historical data found for', symbol);
         return { error: 'No historical data found' };
       }
-
-      // Log first and last items to verify data
-      console.log('First data point:', JSON.stringify(result[0]));
-      console.log('Last data point:', JSON.stringify(result[result.length - 1]));
 
       // Transform to TradingView format
       const historicalData = result.map(item => {
@@ -338,7 +330,6 @@ export class StockController {
         };
       }).filter(Boolean); // Remove any null entries
 
-      console.log(`Transformed ${historicalData.length} data points`);
       return { data: historicalData };
     } catch (error) {
       console.error('Error fetching historical data:', error);

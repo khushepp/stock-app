@@ -36,16 +36,19 @@ const formatCurrency = (value?: number | null, currency: string = 'USD'): string
 };
 
 // Helper function to format percentage
-const formatPercent = (value?: number, decimals: number = 2): string => {
+const formatPercent = (value?: number, decimals: number = 0): string => {
   if (value === undefined || value === null) return 'N/A';
-  return `${value > 0 ? '+' : ''}${value.toFixed(decimals)}%`;
+  // Convert decimal to percentage and round to nearest integer (e.g., 0.05 -> 5%)
+  const percentageValue = Math.abs(value * 100);
+  return `${value > 0 ? '+' : ''}${percentageValue.toFixed(decimals)}%`;
 };
 
 // Helper function to format sentiment text
-const formatSentiment = (sentiment: { sentiment: string; score?: number }) => {
-  if (!sentiment) return '';
-  const score = sentiment.score !== undefined ? Math.round(sentiment.score * 100) : 0;
-  return `${sentiment.sentiment.toLowerCase()}-${score}%`;
+const formatSentiment = (sentiment: any) => {
+  if (!sentiment) return null;
+  
+  const score = Math.abs(sentiment.sentiment_score * 100).toFixed(0);
+  return `${sentiment.sentiment}-${score}%`;
 };
 
 // Helper function to get sentiment color
@@ -115,12 +118,9 @@ const StockDetailsOverlay: React.FC = () => {
       setIsLoadingNews(true);
       setNewsError(null);
       
-      console.log('Fetching news for symbol:', symbol);
       const url = `http://10.0.2.2:3000/api/stock-details/portfolio-news?symbols=${encodeURIComponent(symbol)}`;
-      console.log('News API URL:', url);
       
       const response = await fetch(url);
-      console.log('News API response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -129,7 +129,6 @@ const StockDetailsOverlay: React.FC = () => {
       }
       
       const data = await response.json();
-      console.log('News API response data:', JSON.stringify(data, null, 2));
       
       if (data.error) {
         console.error('News API returned error:', data.error);
@@ -139,7 +138,6 @@ const StockDetailsOverlay: React.FC = () => {
       // Take the latest 5 news items
       const newsItems = Array.isArray(data.news) ? data.news : 
                       Array.isArray(data) ? data : [];
-      console.log('Processed news items:', newsItems.length);
       
       const latestNews = newsItems.slice(0, 5);
       setNews(latestNews);
@@ -233,7 +231,6 @@ const StockDetailsOverlay: React.FC = () => {
       });
 
       const responseData = await response.json();
-      console.log('Raw response from server:', JSON.stringify(responseData, null, 2));
 
       if (!response.ok) {
         throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
@@ -243,13 +240,6 @@ const StockDetailsOverlay: React.FC = () => {
       if (!responseData.data || !Array.isArray(responseData.data)) {
         console.error('Invalid data format:', responseData);
         throw new Error('Invalid data format received');
-      }
-
-      // Log first and last items for verification
-      console.log(`Received ${responseData.data.length} data points`);
-      if (responseData.data.length > 0) {
-        console.log('First data point:', JSON.stringify(responseData.data[0]));
-        console.log('Last data point:', JSON.stringify(responseData.data[responseData.data.length - 1]));
       }
 
       setChartData(responseData.data);

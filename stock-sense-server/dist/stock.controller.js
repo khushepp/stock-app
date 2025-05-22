@@ -241,19 +241,15 @@ let StockController = class StockController {
                 period1 = new Date();
                 period1.setFullYear(period1.getFullYear() - 5);
             }
-            console.log(`Fetching historical data for ${symbol} with interval ${interval} and period1 ${period1}`);
             const result = await yahoo_finance2_1.default.historical(symbol, {
                 period1,
                 interval,
                 includeAdjustedClose: true,
             });
-            console.log(`Received ${result?.length || 0} data points for ${symbol}`);
             if (!result || result.length === 0) {
                 console.error('No historical data found for', symbol);
                 return { error: 'No historical data found' };
             }
-            console.log('First data point:', JSON.stringify(result[0]));
-            console.log('Last data point:', JSON.stringify(result[result.length - 1]));
             const historicalData = result.map(item => {
                 if (!item.date) {
                     console.error('Item missing date field:', item);
@@ -268,7 +264,6 @@ let StockController = class StockController {
                     volume: item.volume || 0,
                 };
             }).filter(Boolean);
-            console.log(`Transformed ${historicalData.length} data points`);
             return { data: historicalData };
         }
         catch (error) {
