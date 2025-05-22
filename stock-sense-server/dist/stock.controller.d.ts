@@ -3,18 +3,31 @@ export declare class StockController {
     private readonly sentimentService;
     private newsService;
     constructor(sentimentService: SentimentService);
-    getNews(category?: string): Promise<{
+    getNews(category?: string, includeSentiment?: boolean): Promise<{
+        error: any;
+        news?: undefined;
+    } | {
+        news: any;
+        error?: undefined;
+    }>;
+    getPortfolioNews(symbols: string, includeSentiment?: boolean): Promise<{
         error: any;
         news?: undefined;
     } | {
         news: any[];
         error?: undefined;
     }>;
-    getPortfolioNews(symbols: string): Promise<{
-        error: any;
-        news?: undefined;
+    analyzeSentiment(text: string, ticker?: string): Promise<{
+        error: string;
+        text?: undefined;
+        ticker?: undefined;
+        sentiment?: undefined;
+        sentiment_score?: undefined;
     } | {
-        news: any[];
+        text: string;
+        ticker: string;
+        sentiment: "positive" | "negative" | "neutral";
+        sentiment_score: number;
         error?: undefined;
     }>;
     getStockDetails(ticker: string): Promise<{

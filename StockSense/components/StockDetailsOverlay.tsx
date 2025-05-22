@@ -112,6 +112,51 @@ const StockDetailsOverlay: React.FC = () => {
   const [news, setNews] = useState<any[]>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [newsError, setNewsError] = useState<string | null>(null);
+  const [loadingSentiment, setLoadingSentiment] = useState<Record<string, boolean>>({});
+  const [sentimentErrors, setSentimentErrors] = useState<Record<string, string>>({});
+
+  const analyzeNewsSentiment = useCallback(async (newsItem: any, index: number) => {
+    const newsId = newsItem.id || `news-${index}`;
+    try {
+      setLoadingSentiment(prev => ({ ...prev, [newsId]: true }));
+      setSentimentErrors(prev => ({ ...prev, [newsId]: '' }));
+      
+      const text = [newsItem.headline, newsItem.summary].filter(Boolean).join('. ');
+      const ticker = newsItem.symbol || initialStock?.symbol || '';
+      
+      const response = await fetch(`http://10.0.2.2:3000/api/stock-details/analyze-sentiment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, ticker })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to analyze sentiment');
+      }
+      
+      const result = await response.json();
+      
+      // Update the news item with sentiment
+      setNews(prevNews => 
+        prevNews.map(item => 
+          (item.id === newsItem.id || item === newsItem) ? { ...item, sentiment: result } : item
+        )
+      );
+      
+      return result;
+    } catch (err: any) {
+      console.error('Error analyzing sentiment:', err);
+      setSentimentErrors(prev => ({
+        ...prev, 
+        [newsId]: 'Failed to analyze sentiment. ' + (err.message || '')
+      }));
+      return null;
+    } finally {
+      setLoadingSentiment(prev => ({ ...prev, [newsId]: false }));
+    }
+  }, [initialStock]);
 
   const fetchNews = useCallback(async (symbol: string) => {
     try {
@@ -262,7 +307,7 @@ const StockDetailsOverlay: React.FC = () => {
 
   const renderError = () => (
     <View style={styles.errorContainer}>
-      <Text style={styles.errorText}>Error: {error}</Text>
+      <Text style={styles.errorTextLarge}>Error: {error}</Text>
       <TouchableOpacity 
         style={styles.retryButton}
         onPress={() => {
@@ -451,7 +496,7 @@ const StockDetailsOverlay: React.FC = () => {
               data={news}
               keyExtractor={(item, index) => item.id ? item.id.toString() : `news-${index}`}
               scrollEnabled={false}
-              renderItem={({ item }) => {
+              renderItem={({ item, index }) => {
                 const newsDate = item.datetime ? new Date(item.datetime * 1000) : null;
                 return (
                   <TouchableOpacity 
@@ -467,14 +512,30 @@ const StockDetailsOverlay: React.FC = () => {
                           {item.source || 'Unknown source'}
                           {newsDate && ` • ${newsDate.toLocaleDateString()}`}
                         </Text>
-                        {item.sentiment && (
-                          <Text style={[
-                            styles.sentimentText,
-                            { color: getSentimentColor(item.sentiment.sentiment) }
-                          ]}>
-                            {formatSentiment(item.sentiment)}
-                          </Text>
-                        )}
+                        <View style={styles.sentimentContainer}>
+                          {loadingSentiment[item.id || `news-${index}`] ? (
+                            <ActivityIndicator size="small" color="#2e7d32" />
+                          ) : item.sentiment ? (
+                            <Text style={[
+                              styles.sentimentText,
+                              { color: getSentimentColor(item.sentiment.sentiment) }
+                            ]}>
+                              {formatSentiment(item.sentiment)}
+                            </Text>
+                          ) : (
+                            <TouchableOpacity 
+                              onPress={() => analyzeNewsSentiment(item, index)}
+                              style={styles.analyzeButton}
+                            >
+                              <Text style={styles.analyzeButtonText}>Analyze</Text>
+                            </TouchableOpacity>
+                          )}
+                          {sentimentErrors[item.id || `news-${index}`] && (
+                            <Text style={styles.errorText}>
+                              {sentimentErrors[item.id || `news-${index}`]}
+                            </Text>
+                          )}
+                        </View>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -637,6 +698,39 @@ const styles = StyleSheet.create({
   },
   
   // Sections
+  // Sentiment Analysis
+  sentimentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  analyzeButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginLeft: 'auto',
+  },
+  analyzeButtonText: {
+    color: '#007AFF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  sentimentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+    marginLeft: 8,
+  },
+  // Error text for small inline messages (like sentiment analysis errors)
+  errorText: {
+    fontSize: 10,
+    color: '#f44336',
+    marginTop: 2,
+    textAlign: 'left',
+  },
+  
+  // Sections
   sectionHeader: {
     backgroundColor: '#f8f8f8',
     paddingVertical: 8,
@@ -719,6 +813,8 @@ const styles = StyleSheet.create({
   // News Styles
   newsItem: {
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   newsContent: {
     flex: 1,
@@ -740,12 +836,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 4,
-  },
-  sentimentText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-    marginLeft: 8,
   },
   newsDivider: {
     height: 1,
@@ -789,7 +879,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 32,
   },
-  errorText: {
+  // Error container for full-page error states
+  errorTextLarge: {
     fontSize: 16,
     color: '#c62828',
     textAlign: 'center',

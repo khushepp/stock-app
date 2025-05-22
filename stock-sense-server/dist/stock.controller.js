@@ -25,37 +25,48 @@ class FinnhubNewsService {
     constructor(sentimentService) {
         this.sentimentService = sentimentService;
     }
-    async fetchLatestNews(category = 'general') {
+    async fetchLatestNews(category = 'general', includeSentiment = false) {
         if (!this.apiKey) {
             throw new Error('Finnhub API key not set');
         }
         try {
             const url = `${this.baseUrl}?category=${category}&token=${this.apiKey}`;
             const response = await axios_1.default.get(url);
-            const newsWithSentiment = await Promise.all(response.data.map(async (newsItem) => ({
-                ...newsItem,
-                sentiment: await this.analyzeNewsSentiment(newsItem)
-            })));
-            return newsWithSentiment;
+            const allNews = response.data;
+            if (includeSentiment) {
+                const newsWithSentiment = await Promise.all(allNews.map(async (newsItem) => ({
+                    ...newsItem,
+                    sentiment: await this.analyzeNewsSentiment(newsItem)
+                })));
+                return newsWithSentiment;
+            }
+            return allNews;
         }
         catch (error) {
             return { error: error?.response?.data?.error || 'Failed to fetch news' };
         }
     }
-    async analyzeNewsSentiment(newsItem) {
+    async analyzeNewsSentiment(newsItem, ticker) {
         try {
             const textToAnalyze = [newsItem.headline, newsItem.summary].filter(Boolean).join('. ');
-            return await this.sentimentService.analyzeSentiment(textToAnalyze);
+            let tickerToUse = 'general market';
+            if (ticker) {
+                tickerToUse = ticker;
+            }
+            else if (newsItem.related && newsItem.related.split(',').length > 0) {
+                tickerToUse = newsItem.related.split(',')[0].trim();
+            }
+            return await this.sentimentService.analyzeSentiment(textToAnalyze, tickerToUse);
         }
         catch (error) {
             console.error('Error in sentiment analysis:', error);
             return {
-                sentiment_score: 0,
                 sentiment: 'neutral',
+                sentiment_score: 0
             };
         }
     }
-    async fetchPortfolioNews(symbols, from, to) {
+    async fetchPortfolioNews(symbols, from, to, includeSentiment = false) {
         if (!this.apiKey) {
             throw new Error('Finnhub API key not set');
         }
@@ -68,11 +79,15 @@ class FinnhubNewsService {
             });
             const responses = await Promise.all(newsPromises);
             let allNews = responses.flatMap(response => response.data);
-            allNews = await Promise.all(allNews.map(async (newsItem) => ({
-                ...newsItem,
-                sentiment: await this.analyzeNewsSentiment(newsItem)
-            })));
-            return allNews.sort((a, b) => b.datetime - a.datetime);
+            allNews.sort((a, b) => b.datetime - a.datetime);
+            if (includeSentiment) {
+                const newsWithSentiment = await Promise.all(allNews.map(async (newsItem) => ({
+                    ...newsItem,
+                    sentiment: await this.analyzeNewsSentiment(newsItem, newsItem.symbol || symbols[0])
+                })));
+                return newsWithSentiment;
+            }
+            return allNews;
         }
         catch (error) {
             console.error('Error in fetchPortfolioNews:', error);
@@ -87,32 +102,52 @@ let StockController = class StockController {
         this.sentimentService = sentimentService;
         this.newsService = new FinnhubNewsService(sentimentService);
     }
-    async getNews(category = 'business') {
+    async getNews(category = 'business', includeSentiment = false) {
         try {
-            const newsData = await this.newsService.fetchLatestNews(category);
+            const newsData = await this.newsService.fetchLatestNews(category, includeSentiment);
             if ('error' in newsData) {
                 return { error: newsData.error };
             }
             return { news: newsData };
         }
         catch (error) {
+            console.error('Error in getNews:', error);
             return { error: 'Failed to fetch news data.' };
         }
     }
-    async getPortfolioNews(symbols) {
+    async getPortfolioNews(symbols, includeSentiment = false) {
         if (!symbols) {
             return { error: 'Symbols parameter is required.' };
         }
         try {
             const oneWeekAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-            const newsData = await this.newsService.fetchPortfolioNews(symbols.split(','), oneWeekAgo, Math.floor(Date.now() / 1000));
+            const newsData = await this.newsService.fetchPortfolioNews(symbols.split(','), oneWeekAgo, Math.floor(Date.now() / 1000), includeSentiment);
             if ('error' in newsData) {
                 return { error: newsData.error };
             }
             return { news: newsData };
         }
         catch (error) {
+            console.error('Error in getPortfolioNews:', error);
             return { error: 'Failed to fetch portfolio news data.' };
+        }
+    }
+    async analyzeSentiment(text, ticker = 'general market') {
+        if (!text) {
+            return { error: 'Text is required for sentiment analysis.' };
+        }
+        try {
+            const sentimentResult = await this.sentimentService.analyzeSentiment(text, ticker);
+            return {
+                text,
+                ticker,
+                sentiment: sentimentResult.sentiment,
+                sentiment_score: sentimentResult.sentiment_score
+            };
+        }
+        catch (error) {
+            console.error('Error in analyzeSentiment:', error);
+            return { error: 'Failed to analyze sentiment.' };
         }
     }
     async getStockDetails(ticker) {
@@ -295,17 +330,27 @@ exports.StockController = StockController;
 __decorate([
     (0, common_1.Get)('/news'),
     __param(0, (0, common_1.Query)('category')),
+    __param(1, (0, common_1.Query)('includeSentiment')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Boolean]),
     __metadata("design:returntype", Promise)
 ], StockController.prototype, "getNews", null);
 __decorate([
     (0, common_1.Get)('/portfolio-news'),
     __param(0, (0, common_1.Query)('symbols')),
+    __param(1, (0, common_1.Query)('includeSentiment')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Boolean]),
     __metadata("design:returntype", Promise)
 ], StockController.prototype, "getPortfolioNews", null);
+__decorate([
+    (0, common_1.Post)('/analyze-sentiment'),
+    __param(0, (0, common_1.Body)('text')),
+    __param(1, (0, common_1.Body)('ticker')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], StockController.prototype, "analyzeSentiment", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)('ticker')),

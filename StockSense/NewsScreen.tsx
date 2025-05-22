@@ -18,8 +18,9 @@ const NewsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [category, setCategory] = useState('business'); // Default category
   const [userId, setUserId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'portfolio' | 'watchlist' | 'market'>('portfolio'); // Track active tab
-  const [companyNames, setCompanyNames] = useState<Record<string, string>>({}); // Cache for company names
+  const [activeTab, setActiveTab] = useState<'portfolio' | 'watchlist' | 'market'>('portfolio');
+  const [companyNames, setCompanyNames] = useState<Record<string, string>>({});
+  const [loadingSentiment, setLoadingSentiment] = useState<Record<string, boolean>>({}); // Track sentiment loading state
   const { showStockDetails } = useStockContext();
 
   // Function to preload company names from portfolio and watchlist
@@ -85,6 +86,60 @@ const NewsScreen = () => {
     }
   }, []);
 
+  // Function to analyze sentiment for a news item
+  const analyzeNewsSentiment = async (text: string, ticker: string, newsId: string) => {
+    try {
+      setLoadingSentiment(prev => ({ ...prev, [newsId]: true }));
+      
+      const response = await fetch(`${BACKEND_URL}/analyze-sentiment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, ticker })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to analyze sentiment');
+      }
+      
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error analyzing sentiment:', error);
+      return null;
+    } finally {
+      setLoadingSentiment(prev => ({ ...prev, [newsId]: false }));
+    }
+  };
+
+  // Function to update sentiment for a news item
+  const updateNewsItemSentiment = (newsId: string, sentiment: any, tab: 'portfolio' | 'watchlist' | 'market') => {
+    const updater = (prevNews: any[]) => 
+      prevNews.map(item => 
+        item.id === newsId ? { ...item, sentiment } : item
+      );
+    
+    if (tab === 'portfolio') {
+      setPortfolioNews(updater);
+    } else if (tab === 'watchlist') {
+      setWatchlistNews(updater);
+    } else {
+      setMarketNews(updater);
+    }
+  };
+
+  // Handler for when user requests sentiment analysis
+  const handleAnalyzeSentiment = async (item: any, tab: 'portfolio' | 'watchlist' | 'market') => {
+    const text = [item.headline, item.summary].filter(Boolean).join('. ');
+    const ticker = item.symbol || (item.related ? item.related.split(',')[0].trim() : 'general market');
+    
+    const sentiment = await analyzeNewsSentiment(text, ticker, item.id);
+    if (sentiment) {
+      updateNewsItemSentiment(item.id, sentiment, tab);
+    }
+  };
+
   const fetchPortfolioNews = async () => {
     try {
       setLoading(true);
@@ -120,7 +175,7 @@ const NewsScreen = () => {
       const portfolioStocks = Array.from(new Set(portfolioData.map(item => item.ticker)));
       const symbols = portfolioStocks.join(',');
       
-      // Fetch news for portfolio stocks
+      // Fetch news for portfolio stocks without sentiment
       const response = await fetch(`${BACKEND_URL}/portfolio-news?symbols=${encodeURIComponent(symbols)}`);
       
       if (!response.ok) {
@@ -183,7 +238,7 @@ const NewsScreen = () => {
       const watchlistTickers = Array.from(new Set(watchlistData.map(item => item.ticker)));
       const symbols = watchlistTickers.join(',');
       
-      // Fetch news for watchlist tickers
+      // Fetch news for watchlist tickers without sentiment
       const response = await fetch(`${BACKEND_URL}/portfolio-news?symbols=${encodeURIComponent(symbols)}`);
       
       if (!response.ok) {
@@ -199,7 +254,7 @@ const NewsScreen = () => {
         // Process the news items
         const newsItems = Array.isArray(data.news) ? data.news : 
                          Array.isArray(data) ? data : [];
-                          
+                         
         setWatchlistNews(newsItems);
       }
     } catch (err) {
@@ -215,7 +270,7 @@ const NewsScreen = () => {
       setLoading(true);
       setError('');
       
-      // Use the correct endpoint for market news
+      // Fetch market news without sentiment analysis
       const apiUrl = `${BACKEND_URL}/news?category=${encodeURIComponent(category)}`;
       
       const response = await fetch(apiUrl, {
@@ -464,14 +519,25 @@ const NewsScreen = () => {
           )}
           
           {/* Sentiment Indicator */}
-          {item.sentiment && (
-            <Text style={[
-              styles.sentimentText,
-              { color: getSentimentStyle(item.sentiment.sentiment).color }
-            ]}>
-              {formatSentiment(item.sentiment)}
-            </Text>
-          )}
+          <View style={styles.sentimentContainer}>
+            {loadingSentiment[item.id] ? (
+              <ActivityIndicator size="small" color="#2e7d32" />
+            ) : item.sentiment ? (
+              <Text style={[
+                styles.sentimentText,
+                { color: getSentimentStyle(item.sentiment.sentiment).color }
+              ]}>
+                {formatSentiment(item.sentiment)}
+              </Text>
+            ) : (
+              <TouchableOpacity 
+                onPress={() => handleAnalyzeSentiment(item, activeTab)}
+                style={styles.analyzeButton}
+              >
+                <Text style={styles.analyzeButtonText}>Analyze</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         
         <Text style={styles.newsTitle} numberOfLines={2} ellipsizeMode="tail">
@@ -711,11 +777,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  sentimentContainer: {
+    marginLeft: 'auto',
+    minWidth: 80,
+    alignItems: 'flex-end',
+  },
   sentimentText: {
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'capitalize',
-    marginLeft: 'auto', // Pushes the sentiment to the right
+    textAlign: 'right',
+  },
+  analyzeButton: {
+    backgroundColor: '#e0e0e0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  analyzeButtonText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
   },
   container: {
     flex: 1,

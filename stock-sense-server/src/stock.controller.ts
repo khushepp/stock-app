@@ -10,7 +10,7 @@ class FinnhubNewsService {
 
   constructor(private readonly sentimentService: SentimentService) {}
 
-  async fetchLatestNews(category: string = 'general') {
+  async fetchLatestNews(category: string = 'general', includeSentiment: boolean = false) {
     if (!this.apiKey) {
       throw new Error('Finnhub API key not set');
     }
@@ -18,36 +18,50 @@ class FinnhubNewsService {
       const url = `${this.baseUrl}?category=${category}&token=${this.apiKey}`;
       const response = await axios.get(url);
       
-      // Add sentiment analysis to each news item
-      const newsWithSentiment = await Promise.all(
-        response.data.map(async (newsItem: any) => ({
-          ...newsItem,
-          sentiment: await this.analyzeNewsSentiment(newsItem)
-        }))
-      );
+      const allNews = response.data;
       
-      return newsWithSentiment;
+      if (includeSentiment) {
+        // Add sentiment analysis to each news item if requested
+        const newsWithSentiment = await Promise.all(
+          allNews.map(async (newsItem: any) => ({
+            ...newsItem,
+            sentiment: await this.analyzeNewsSentiment(newsItem)
+          }))
+        );
+        return newsWithSentiment;
+      }
+      
+      return allNews;
     } catch (error: any) {
       // Handle rate limit or API errors
       return { error: error?.response?.data?.error || 'Failed to fetch news' };
     }
   }
 
-  private async analyzeNewsSentiment(newsItem: any): Promise<SentimentResult> {
+  private async analyzeNewsSentiment(newsItem: any, ticker?: string): Promise<SentimentResult> {
     try {
       // Use headline and summary for sentiment analysis
       const textToAnalyze = [newsItem.headline, newsItem.summary].filter(Boolean).join('. ');
-      return await this.sentimentService.analyzeSentiment(textToAnalyze);
+      
+      // Determine the ticker to use
+      let tickerToUse = 'general market';
+      if (ticker) {
+        tickerToUse = ticker;
+      } else if (newsItem.related && newsItem.related.split(',').length > 0) {
+        tickerToUse = newsItem.related.split(',')[0].trim();
+      }
+      
+      return await this.sentimentService.analyzeSentiment(textToAnalyze, tickerToUse);
     } catch (error) {
       console.error('Error in sentiment analysis:', error);
       return {
-        sentiment_score: 0,
-        sentiment: 'neutral' as const,
+        sentiment: 'neutral',
+        sentiment_score: 0
       };
     }
   }
 
-  async fetchPortfolioNews(symbols: string[], from: number, to: number) {
+  async fetchPortfolioNews(symbols: string[], from: number, to: number, includeSentiment: boolean = false) {
     if (!this.apiKey) {
       throw new Error('Finnhub API key not set');
     }
@@ -64,16 +78,21 @@ class FinnhubNewsService {
       const responses = await Promise.all(newsPromises);
       let allNews = responses.flatMap(response => response.data);
       
-      // Add sentiment analysis to each news item
-      allNews = await Promise.all(
-        allNews.map(async (newsItem: any) => ({
-          ...newsItem,
-          sentiment: await this.analyzeNewsSentiment(newsItem)
-        }))
-      );
-      
       // Sort news by datetime in descending order
-      return allNews.sort((a, b) => b.datetime - a.datetime);
+      allNews.sort((a, b) => b.datetime - a.datetime);
+      
+      if (includeSentiment) {
+        // Add sentiment analysis to each news item if requested
+        const newsWithSentiment = await Promise.all(
+          allNews.map(async (newsItem: any) => ({
+            ...newsItem,
+            sentiment: await this.analyzeNewsSentiment(newsItem, newsItem.symbol || symbols[0])
+          }))
+        );
+        return newsWithSentiment;
+      }
+      
+      return allNews;
     } catch (error: any) {
       console.error('Error in fetchPortfolioNews:', error);
       return { error: error?.response?.data?.error || 'Failed to fetch portfolio news' };
@@ -90,20 +109,27 @@ export class StockController {
   }
 
   @Get('/news')
-  async getNews(@Query('category') category: string = 'business') {
+  async getNews(
+    @Query('category') category: string = 'business',
+    @Query('includeSentiment') includeSentiment: boolean = false
+  ) {
     try {
-      const newsData = await this.newsService.fetchLatestNews(category);
+      const newsData = await this.newsService.fetchLatestNews(category, includeSentiment);
       if ('error' in newsData) {
         return { error: newsData.error };
       }
       return { news: newsData };
     } catch (error) {
+      console.error('Error in getNews:', error);
       return { error: 'Failed to fetch news data.' };
     }
   }
 
   @Get('/portfolio-news')
-  async getPortfolioNews(@Query('symbols') symbols: string) {
+  async getPortfolioNews(
+    @Query('symbols') symbols: string,
+    @Query('includeSentiment') includeSentiment: boolean = false
+  ) {
     if (!symbols) {
       return { error: 'Symbols parameter is required.' };
     }
@@ -113,7 +139,8 @@ export class StockController {
       const newsData = await this.newsService.fetchPortfolioNews(
         symbols.split(','),
         oneWeekAgo,
-        Math.floor(Date.now() / 1000)
+        Math.floor(Date.now() / 1000),
+        includeSentiment
       );
       
       if ('error' in newsData) {
@@ -121,7 +148,31 @@ export class StockController {
       }
       return { news: newsData };
     } catch (error) {
+      console.error('Error in getPortfolioNews:', error);
       return { error: 'Failed to fetch portfolio news data.' };
+    }
+  }
+
+  @Post('/analyze-sentiment')
+  async analyzeSentiment(
+    @Body('text') text: string,
+    @Body('ticker') ticker: string = 'general market'
+  ) {
+    if (!text) {
+      return { error: 'Text is required for sentiment analysis.' };
+    }
+
+    try {
+      const sentimentResult = await this.sentimentService.analyzeSentiment(text, ticker);
+      return {
+        text,
+        ticker,
+        sentiment: sentimentResult.sentiment,
+        sentiment_score: sentimentResult.sentiment_score
+      };
+    } catch (error) {
+      console.error('Error in analyzeSentiment:', error);
+      return { error: 'Failed to analyze sentiment.' };
     }
   }
 
